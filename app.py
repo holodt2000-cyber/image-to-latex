@@ -56,32 +56,50 @@ def convert_image():
     return jsonify({'error': 'Invalid file type'}), 400
 
 def convert_to_latex(image_path):
-    """Convert image to TikZ code"""
+    """Convert image to TikZ code for Overleaf"""
     img = None
     try:
         # Open and process image
         img = Image.open(image_path)
 
         # Convert to grayscale
-        img = img.convert('L')
+        img_gray = img.convert('L')
 
         # Get image dimensions
         width, height = img.size
 
-        # Create basic TikZ code with image dimensions
-        tikz_code = f"""\\begin{{tikzpicture}}[scale=1]
-% Image dimensions: {width}x{height}
-% This is a simplified conversion
-% For better results, use Inkscape with TikZ export or potrace
+        # Sample some pixels to create a simple representation
+        # Reduce resolution for TikZ (too many points will be slow)
+        sample_width = min(width, 50)
+        sample_height = min(height, 50)
+        img_small = img_gray.resize((sample_width, sample_height), Image.Resampling.LANCZOS)
 
-% You can include the image directly:
-% \\node[anchor=south west,inner sep=0] at (0,0) {{\\includegraphics[width={width/100}cm]{{your-image.png}}}};
+        # Create TikZ code with pixel-based shading
+        tikz_code = f"""\\documentclass{{standalone}}
+\\usepackage{{tikz}}
 
-% Or trace it manually in TikZ
-\\draw[thick] (0,0) rectangle ({width/100},{height/100});
-\\node at ({width/200},{height/200}) {{Vectorize this image manually or use Inkscape}};
+\\begin{{document}}
+\\begin{{tikzpicture}}[x=0.1cm, y=0.1cm]
 
-\\end{{tikzpicture}}"""
+% Original image size: {width}x{height}px
+% Sampled to: {sample_width}x{sample_height} for TikZ
+
+"""
+
+        # Generate rectangles for each pixel (grayscale)
+        for y in range(sample_height):
+            for x in range(sample_width):
+                pixel_value = img_small.getpixel((x, y))
+                # Convert to grayscale value (0=black, 255=white)
+                gray_value = pixel_value / 255.0
+
+                # Only draw darker pixels to reduce code size
+                if gray_value < 0.9:
+                    tikz_code += f"\\fill[black!{int((1-gray_value)*100)}] ({x},{sample_height-y-1}) rectangle ({x+1},{sample_height-y});\n"
+
+        tikz_code += """
+\\end{tikzpicture}
+\\end{document}"""
 
         return tikz_code
 
