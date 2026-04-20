@@ -37,6 +37,20 @@ uploadArea.addEventListener('drop', (e) => {
     handleFile(e.dataTransfer.files[0]);
 });
 
+// Paste from clipboard
+document.addEventListener('paste', (e) => {
+    const items = e.clipboardData.items;
+
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            e.preventDefault();
+            const blob = items[i].getAsFile();
+            handleFile(blob);
+            break;
+        }
+    }
+});
+
 function handleFile(file) {
     if (!file || !file.type.startsWith('image/')) {
         alert('Пожалуйста, выберите изображение');
