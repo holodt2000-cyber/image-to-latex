@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to LaTeX Converter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Image to LaTeX Converter</h1>
+        <p class="subtitle">Загрузите изображение с математической формулой</p>
+
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="imageInput" accept="image/*" hidden>
+            <div class="upload-content">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p>Нажмите или перетащите изображение</p>
+                <span class="file-types">PNG, JPG, JPEG, GIF, BMP</span>
+            </div>
+        </div>
+
+        <div id="preview" class="preview hidden">
+            <h3>Загруженное изображение:</h3>
+            <img id="previewImage" alt="Preview">
+        </div>
+
+        <button id="convertBtn" class="btn hidden">Конвертировать в LaTeX</button>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Обработка изображения...</p>
+        </div>
+
+        <div id="result" class="result hidden">
+            <h3>LaTeX код:</h3>
+            <div class="latex-code">
+                <code id="latexOutput"></code>
+                <button id="copyBtn" class="copy-btn">Копировать</button>
+            </div>
+
+            <h3>Предпросмотр:</h3>
+            <div class="latex-preview" id="latexPreview"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
