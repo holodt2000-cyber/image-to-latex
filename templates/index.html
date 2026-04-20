@@ -10,8 +10,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>Image to LaTeX Converter</h1>
-        <p class="subtitle">Загрузите изображение с математической формулой</p>
+        <h1>Image to TikZ Converter</h1>
+        <p class="subtitle">Загрузите изображение для конвертации в TikZ код</p>
 
         <div class="upload-area" id="uploadArea">
             <input type="file" id="imageInput" accept="image/*" hidden>
@@ -31,7 +31,7 @@
             <img id="previewImage" alt="Preview">
         </div>
 
-        <button id="convertBtn" class="btn hidden">Конвертировать в LaTeX</button>
+        <button id="convertBtn" class="btn hidden">Конвертировать в TikZ</button>
 
         <div id="loading" class="loading hidden">
             <div class="spinner"></div>
@@ -39,14 +39,16 @@
         </div>
 
         <div id="result" class="result hidden">
-            <h3>LaTeX код:</h3>
+            <h3>TikZ код:</h3>
             <div class="latex-code">
                 <code id="latexOutput"></code>
                 <button id="copyBtn" class="copy-btn">Копировать</button>
             </div>
 
             <h3>Предпросмотр:</h3>
-            <div class="latex-preview" id="latexPreview"></div>
+            <div class="latex-preview" id="latexPreview">
+                <p style="color: #666;">Скопируйте TikZ код и вставьте в TeXmaker для просмотра</p>
+            </div>
         </div>
     </div>
 

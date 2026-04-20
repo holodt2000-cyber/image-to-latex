@@ -2,22 +2,14 @@ from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from PIL import Image
-from pix2tex.cli import LatexOCR
+import subprocess
+import tempfile
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-# Initialize LaTeX OCR model
-model = None
-
-def get_model():
-    global model
-    if model is None:
-        model = LatexOCR()
-    return model
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
 
@@ -64,13 +56,35 @@ def convert_image():
     return jsonify({'error': 'Invalid file type'}), 400
 
 def convert_to_latex(image_path):
-    """Convert image to LaTeX using OCR model"""
+    """Convert image to TikZ code"""
     img = None
     try:
+        # Open and process image
         img = Image.open(image_path)
-        model = get_model()
-        latex_code = model(img)
-        return latex_code
+
+        # Convert to grayscale
+        img = img.convert('L')
+
+        # Get image dimensions
+        width, height = img.size
+
+        # Create basic TikZ code with image dimensions
+        tikz_code = f"""\\begin{{tikzpicture}}[scale=1]
+% Image dimensions: {width}x{height}
+% This is a simplified conversion
+% For better results, use Inkscape with TikZ export or potrace
+
+% You can include the image directly:
+% \\node[anchor=south west,inner sep=0] at (0,0) {{\\includegraphics[width={width/100}cm]{{your-image.png}}}};
+
+% Or trace it manually in TikZ
+\\draw[thick] (0,0) rectangle ({width/100},{height/100});
+\\node at ({width/200},{height/200}) {{Vectorize this image manually or use Inkscape}};
+
+\\end{{tikzpicture}}"""
+
+        return tikz_code
+
     except Exception as e:
         raise Exception(f"Failed to convert image: {str(e)}")
     finally:

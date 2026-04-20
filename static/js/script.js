@@ -90,13 +90,8 @@ convertBtn.addEventListener('click', async () => {
 
         if (data.success) {
             latexOutput.textContent = data.latex;
-            latexPreview.innerHTML = `\\[${data.latex}\\]`;
-
-            // Render MathJax
-            if (window.MathJax) {
-                MathJax.typesetPromise([latexPreview]);
-            }
-
+            // Don't render TikZ with MathJax - just show the code
+            latexPreview.innerHTML = '<p style="color: #666;">Скопируйте TikZ код и вставьте в TeXmaker для просмотра</p>';
             result.classList.remove('hidden');
         } else {
             alert('Ошибка: ' + data.error);
