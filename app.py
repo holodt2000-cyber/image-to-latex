@@ -2,8 +2,8 @@ from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from PIL import Image
-import subprocess
-import tempfile
+import cv2
+import numpy as np
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -56,49 +56,63 @@ def convert_image():
     return jsonify({'error': 'Invalid file type'}), 400
 
 def convert_to_latex(image_path):
-    """Convert image to TikZ code for Overleaf"""
+    """Convert image to TikZ code using contour detection"""
     img = None
     try:
-        # Open and process image
-        img = Image.open(image_path)
+        # Read image with OpenCV
+        img_cv = cv2.imread(image_path)
 
         # Convert to grayscale
-        img_gray = img.convert('L')
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+
+        # Apply threshold to get binary image
+        _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+
+        # Find contours
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Get image dimensions
-        width, height = img.size
+        height, width = gray.shape
+        scale = 0.1  # Scale factor for TikZ coordinates
 
-        # Sample some pixels to create a simple representation
-        # Reduce resolution for TikZ (too many points will be slow)
-        sample_width = min(width, 50)
-        sample_height = min(height, 50)
-        img_small = img_gray.resize((sample_width, sample_height), Image.Resampling.LANCZOS)
-
-        # Create TikZ code with pixel-based shading
+        # Start TikZ document
         tikz_code = f"""\\documentclass{{standalone}}
 \\usepackage{{tikz}}
 
 \\begin{{document}}
-\\begin{{tikzpicture}}[x=0.1cm, y=0.1cm]
+\\begin{{tikzpicture}}[scale=1]
 
 % Original image size: {width}x{height}px
-% Sampled to: {sample_width}x{sample_height} for TikZ
+% Vectorized using contour detection
 
 """
 
-        # Generate rectangles for each pixel (grayscale)
-        for y in range(sample_height):
-            for x in range(sample_width):
-                pixel_value = img_small.getpixel((x, y))
-                # Convert to grayscale value (0=black, 255=white)
-                gray_value = pixel_value / 255.0
+        # Convert contours to TikZ paths
+        for i, contour in enumerate(contours):
+            # Skip very small contours
+            if len(contour) < 3:
+                continue
 
-                # Only draw darker pixels to reduce code size
-                if gray_value < 0.9:
-                    tikz_code += f"\\fill[black!{int((1-gray_value)*100)}] ({x},{sample_height-y-1}) rectangle ({x+1},{sample_height-y});\n"
+            # Simplify contour to reduce points
+            epsilon = 0.01 * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
 
-        tikz_code += """
-\\end{tikzpicture}
+            # Start path
+            tikz_code += f"% Contour {i+1}\n\\draw[fill=black, line width=0.1pt] "
+
+            # Add points
+            for j, point in enumerate(approx):
+                x = point[0][0] * scale
+                y = (height - point[0][1]) * scale  # Flip Y coordinate
+
+                if j == 0:
+                    tikz_code += f"({x:.2f},{y:.2f})"
+                else:
+                    tikz_code += f" -- ({x:.2f},{y:.2f})"
+
+            tikz_code += " -- cycle;\n\n"
+
+        tikz_code += """\\end{tikzpicture}
 \\end{document}"""
 
         return tikz_code
@@ -106,8 +120,7 @@ def convert_to_latex(image_path):
     except Exception as e:
         raise Exception(f"Failed to convert image: {str(e)}")
     finally:
-        if img:
-            img.close()
+        pass
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
