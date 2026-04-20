@@ -41,10 +41,9 @@ def convert_image():
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
 
         try:
-            # TODO: Integrate LaTeX OCR model here
+            file.save(filepath)
             latex_code = convert_to_latex(filepath)
 
             return jsonify({
@@ -55,13 +54,18 @@ def convert_image():
             return jsonify({'error': str(e)}), 500
         finally:
             # Clean up uploaded file
-            if os.path.exists(filepath):
-                os.remove(filepath)
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except PermissionError:
+                # File still in use, will be cleaned up later
+                pass
 
     return jsonify({'error': 'Invalid file type'}), 400
 
 def convert_to_latex(image_path):
     """Convert image to LaTeX using OCR model"""
+    img = None
     try:
         img = Image.open(image_path)
         model = get_model()
@@ -69,6 +73,9 @@ def convert_to_latex(image_path):
         return latex_code
     except Exception as e:
         raise Exception(f"Failed to convert image: {str(e)}")
+    finally:
+        if img:
+            img.close()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
