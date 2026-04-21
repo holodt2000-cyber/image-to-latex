@@ -2,11 +2,6 @@ from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 import base64
-import re
-import http.client
-http.client._MAXLINE = 65536
-os.environ['HTTP_PROXY'] = 'http://127.0.0.1:2080'
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:2080'
 # Подключаем актуальное SDK Google GenAI (стандарт апреля 2026)
 try:
     from google import genai
