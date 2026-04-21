@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
-<head>  
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image to LaTeX Converter</title>
@@ -10,7 +10,7 @@
 <body>
     <div class="container">
         <h1>Image to TikZ Converter</h1>
-        <p class="subtitle">Конвертируйте изображения в TikZ код для Overleaf</p>
+        <p class="subtitle">Конвертируйте изображения в TikZ код</p>
 
         <div class="upload-area" id="uploadArea">
             <input type="file" id="imageInput" accept="image/*" hidden>
@@ -21,7 +21,7 @@
                     <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
                 <p>Нажмите или перетащите изображение</p>
-                <span class="file-types">PNG, JPG, JPEG, GIF, BMP • Или нажмите Ctrl+V для вставки</span>
+                <span class="file-types">PNG, JPG, JPEG, GIF, BMP • Ctrl+V для вставки</span>
             </div>
         </div>
 
@@ -40,14 +40,10 @@
         <div id="result" class="result hidden">
             <h3>TikZ код:</h3>
             <div class="latex-code">
-                <code id="latexOutput"></code>
+                <pre><code id="latexOutput"></code></pre>
                 <button id="copyBtn" class="copy-btn">Копировать</button>
             </div>
-
-            <h3>Предпросмотр:</h3>
-            <div class="latex-preview" id="latexPreview">
-                <p style="color: #666;">Скопируйте код и вставьте в Overleaf для компиляции</p>
-            </div>
+            <div class="latex-preview" id="latexPreview"></div>
         </div>
     </div>
 
