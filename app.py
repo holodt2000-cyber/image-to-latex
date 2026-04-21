@@ -80,7 +80,7 @@ def convert_with_gemini_max(image_path):
     """
     
     # Выбираем PRO модель для максимального качества распознавания и кодинга
-    model_id = "gemini-1.5-flash-latest"
+    model_id = "gemini-2.0-flash"
     
     # Читаем изображение как байты
     with open(image_path, "rb") as f:
