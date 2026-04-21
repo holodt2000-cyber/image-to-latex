@@ -38,3 +38,6 @@ checkpoints/
 
 # Logs
 *.log
+
+# Environment variables
+.env

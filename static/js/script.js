@@ -51,6 +51,38 @@ document.addEventListener('paste', (e) => {
     }
 });
 
+// Вставь это в любое место вне других функций
+async function compressImage(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1200; // Оптимально для Gemini 2.5 Flash
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/jpeg', 0.8); // 80% качества — идеально для ИИ
+            };
+        };
+    });
+}
+
+
 function handleFile(file) {
     if (!file || !file.type.startsWith('image/')) {
         alert('Пожалуйста, выберите изображение');
@@ -81,12 +113,27 @@ convertBtn.addEventListener('click', async () => {
     convertBtn.disabled = true;
 
     try {
+        // --- ВОТ ТУТ МЫ ВКЛЮЧАЕМ БОНУС ---
+        // Сжимаем файл перед отправкой
+        const compressedBlob = await compressImage(selectedFile);
+        
+        const formData = new FormData();
+        // Отправляем сжатый блоб вместо оригинального файла
+        formData.append('image', compressedBlob, 'image.jpg'); 
+        // --------------------------------
+        // Внутри convertBtn.addEventListener
         const response = await fetch('/convert', {
-            method: 'POST',
-            body: formData
-        });
+        method: 'POST',
+        body: formData
+    });
 
-        const data = await response.json();
+    // Проверка на статус ответа (404, 500, 429 и т.д.)
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Ошибка сервера: ${response.status}`);
+    }
+
+    const data = await response.json();
 
         if (data.success) {
             latexOutput.textContent = data.latex;

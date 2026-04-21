@@ -1,9 +1,24 @@
 from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
-from PIL import Image
-import cv2
-import numpy as np
+import base64
+import re
+import http.client
+http.client._MAXLINE = 65536
+os.environ['HTTP_PROXY'] = 'http://127.0.0.1:2080'
+os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:2080'
+# Подключаем актуальное SDK Google GenAI (стандарт апреля 2026)
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    print("Ошибка: Установите актуальное SDK: pip install -U google-genai")
+    exit(1)
+
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения (.env файл)
+load_dotenv()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -11,7 +26,17 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
+# Инициализация клиента Gemini
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+gemini_client = None
+
+if GEMINI_API_KEY:
+    # Используем API ключ из .env
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+else:
+    print("ВНИМАНИЕ: GEMINI_API_KEY не найден в .env файле. Конвертация работать не будет.")
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -22,13 +47,16 @@ def index():
 
 @app.route('/convert', methods=['POST'])
 def convert_image():
+    if not gemini_client:
+        return jsonify({'error': 'API Gemini не настроен. Добавьте ключ в .env'}), 500
+
     if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+        return jsonify({'error': 'Изображение не предоставлено'}), 400
 
     file = request.files['image']
 
     if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'error': 'Файл не выбран'}), 400
 
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
@@ -36,156 +64,98 @@ def convert_image():
 
         try:
             file.save(filepath)
-            latex_code = convert_to_latex(filepath)
+            
+            # Основной вызов конвертации через Gemini
+            latex_code = convert_with_gemini_max(filepath)
 
             return jsonify({
                 'success': True,
                 'latex': latex_code
             })
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': f"Ошибка сервера: {str(e)}"}), 500
         finally:
-            # Clean up uploaded file
-            try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-            except PermissionError:
-                # File still in use, will be cleaned up later
-                pass
+            # Очистка загруженного файла
+            if os.path.exists(filepath):
+                os.remove(filepath)
 
-    return jsonify({'error': 'Invalid file type'}), 400
+    return jsonify({'error': 'Недопустимый тип файла'}), 400
 
-def convert_to_latex(image_path):
-    """Convert image to TikZ code using contour detection with colors and shape recognition"""
-    try:
-        # Read image with OpenCV
-        img_cv = cv2.imread(image_path)
 
-        # Get image dimensions
-        height, width = img_cv.shape[:2]
-        scale = 0.05  # Scale factor for TikZ coordinates
+def convert_with_gemini_max(image_path):
+    """
+    Конвертирует изображение в ультимативный, многофункциональный векторный TikZ
+    используя Gemini 2.5 Pro (стандарт апреля 2026).
+    """
+    
+    # Выбираем PRO модель для максимального качества распознавания и кодинга
+    model_id = "gemini-2.5-flash"
+    
+    # Читаем изображение как байты
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
 
-        # Convert to different color spaces
-        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-        hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
+    # УЛЬТИМАТИВНЫЙ ПРОМПТ для векторной графики и всех функций
+    prompt = r"""
+    Проанализируй это изображение и преобразуй его в КРАЙНЕ ВЫСОКОКЛАССНЫЙ, 
+    полностью ВЕКТОРНЫЙ код LaTeX/TikZ.
 
-        # Apply threshold to get binary image
-        _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    Твоя цель — создать код, который выглядит так, будто его написал эксперт по TikZ, 
+    а не просто автоматический конвертер. Используй ВСЕ ВОЗМОЖНЫЕ функции TikZ.
 
-        # Find contours
-        contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    ТРЕБОВАНИЯ К ВЕКТОРНОЙ ГРАФИКЕ И ФУНКЦИЯМ:
 
-        # Start TikZ document
-        tikz_code = f"""\\documentclass{{standalone}}
-\\usepackage{{tikz}}
-\\usepackage{{xcolor}}
+    1. СТРУКТУРА И СТИЛИ (ЭТО ВАЖНО):
+       - Не пиши стили (цвет, толщину линий, форму) внутри каждой команды \\draw.
+       - Вместо этого, определи глобальные стили в начале окружения \\begin{tikzpicture}[...].
+       - Например: [my_block/.style={rectangle, draw=blue, fill=blue!10, rounded corners}, connection/.style={->, thick, >=Stealth}].
+       - Используй эти стили для элементов: \\node[my_block] (n1) {...};
 
-\\begin{{document}}
-\\begin{{tikzpicture}}[scale=1]
+    2. ЦВЕТА И ЗАЛИВКА:
+       - Точно определи RGB цвета элементов.
+       - Глобально определи цвета через \\definecolor{color_name}{RGB}{R,G,B}.
+       - Активно используй прозрачность (opacity) и градиенты (shading), если они есть на оригинале.
+       - Используй закрашенные области (\\fill) вместо обводки (\\draw) там, где это соответствует оригиналу.
 
-% Original image size: {width}x{height}px
-% Vectorized with shape recognition and color detection
+    3. ГЕОМЕТРИЯ И РАСПОЛОЖЕНИЕ:
+       - Используй относительные координаты (например, (node1.east) -- (node2.west)) вместо абсолютных (0,0).
+       - Задействуй библиотеку `positioning` (например, `right=of node1`).
+       - Для сложных путей используй `calc` библиотеку (например, `($ (n1.east)!.5!(n2.west) $)`).
 
-"""
+    4. СТРЕЛКИ И СОЕДИНЕНИЯ:
+       - Используй библиотеку `arrows.meta` для современных наконечников стрелок (например, `{-Stealth[scale=1.2]}`).
+       - Используй ортогональные соединения ( |- или -| ), если линии прямые.
 
-        # Process each contour
-        for i, contour in enumerate(contours):
-            # Skip very small contours
-            area = cv2.contourArea(contour)
-            if area < 100:
-                continue
+    5. ТЕКСТ И МАТЕМАТИКА:
+       - Весь текст оформляй через \\node.
+       - Определи шрифт и размер текста в стилях нод.
+       - Если текст содержит формулы, ОБЯЗАТЕЛЬНО используй математический режим $...$.
 
-            # Get contour color (average color inside contour)
-            mask = np.zeros(gray.shape, np.uint8)
-            cv2.drawContours(mask, [contour], 0, 255, -1)
-            mean_color = cv2.mean(img_cv, mask=mask)
-            b, g, r = int(mean_color[0]), int(mean_color[1]), int(mean_color[2])
+    6. БИБЛИОТЕКИ:
+       - Включи в преамбулу все необходимые библиотеки: positioning, shapes.geometric, arrows.meta, calc, backgrounds, shadows (если есть тени).
 
-            # Convert BGR to RGB and normalize
-            color_rgb = f"{{rgb,255:red,{r};green,{g};blue,{b}}}"
+    ВЕРНИ ТОЛЬКО ЧИСТЫЙ КОД LaTeX, готовый к компиляции (начиная с \documentclass). Без пояснений.
+    """
 
-            # Simplify contour
-            epsilon = 0.02 * cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, epsilon, True)
+    # Вызов Gemini API
+    response = gemini_client.models.generate_content(
+        model=model_id,
+        contents=[
+            prompt,
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+        ]
+    )
 
-            # Detect shape type
-            shape_type, shape_params = detect_shape(approx, contour, scale, height)
+    latex_code = response.text
 
-            if shape_type:
-                tikz_code += f"% Shape {i+1}: {shape_type}\n"
-                tikz_code += f"\\draw[{color_rgb}, fill={color_rgb}, fill opacity=0.8] {shape_params};\n\n"
-            else:
-                # Draw as polygon if shape not recognized
-                tikz_code += f"% Contour {i+1}\n\\draw[{color_rgb}, fill={color_rgb}, fill opacity=0.8, line width=0.5pt] "
+    # Очистка кода от Markdown-обертки ```latex ... ```
+    latex_code = re.sub(r'^```latex\s*', '', latex_code, flags=re.MULTILINE)
+    latex_code = re.sub(r'```$', '', latex_code, flags=re.MULTILINE)
 
-                for j, point in enumerate(approx):
-                    x = point[0][0] * scale
-                    y = (height - point[0][1]) * scale
+    return latex_code.strip()
 
-                    if j == 0:
-                        tikz_code += f"({x:.2f},{y:.2f})"
-                    else:
-                        tikz_code += f" -- ({x:.2f},{y:.2f})"
-
-                tikz_code += " -- cycle;\n\n"
-
-        tikz_code += """\\end{tikzpicture}
-\\end{document}"""
-
-        return tikz_code
-
-    except Exception as e:
-        raise Exception(f"Failed to convert image: {str(e)}")
-
-def detect_shape(approx, contour, scale, height):
-    """Detect geometric shapes from contours"""
-    vertices = len(approx)
-
-    # Get bounding box
-    x, y, w, h = cv2.boundingRect(contour)
-    aspect_ratio = float(w) / h if h > 0 else 0
-
-    # Convert coordinates
-    def to_tikz(point):
-        px = point[0][0] * scale
-        py = (height - point[0][1]) * scale
-        return px, py
-
-    # Circle detection
-    if vertices > 8:
-        (cx, cy), radius = cv2.minEnclosingCircle(contour)
-        area = cv2.contourArea(contour)
-        circle_area = np.pi * (radius ** 2)
-
-        if abs(area - circle_area) / circle_area < 0.2:  # 20% tolerance
-            cx_tikz = cx * scale
-            cy_tikz = (height - cy) * scale
-            r_tikz = radius * scale
-            return "circle", f"({cx_tikz:.2f},{cy_tikz:.2f}) circle ({r_tikz:.2f})"
-
-    # Rectangle detection
-    if vertices == 4:
-        if 0.85 < aspect_ratio < 1.15:  # Square
-            x1, y1 = to_tikz(approx[0])
-            x2, y2 = to_tikz(approx[2])
-            return "square", f"({x1:.2f},{y1:.2f}) rectangle ({x2:.2f},{y2:.2f})"
-        else:  # Rectangle
-            x1, y1 = to_tikz(approx[0])
-            x2, y2 = to_tikz(approx[2])
-            return "rectangle", f"({x1:.2f},{y1:.2f}) rectangle ({x2:.2f},{y2:.2f})"
-
-    # Triangle detection
-    if vertices == 3:
-        p1, p2, p3 = [to_tikz(p) for p in approx]
-        return "triangle", f"({p1[0]:.2f},{p1[1]:.2f}) -- ({p2[0]:.2f},{p2[1]:.2f}) -- ({p3[0]:.2f},{p3[1]:.2f}) -- cycle"
-
-    # Line detection (2 vertices or very elongated shape)
-    if vertices == 2 or (aspect_ratio > 5 or aspect_ratio < 0.2):
-        if vertices >= 2:
-            p1, p2 = to_tikz(approx[0]), to_tikz(approx[-1])
-            return "line", f"({p1[0]:.2f},{p1[1]:.2f}) -- ({p2[0]:.2f},{p2[1]:.2f})"
-
-    return None, None
 
 if __name__ == '__main__':
+    # Перед запуском убедитесь, что создали папку templates и файл index.html в ней.
+    # Также создайте .env файл с ключом GEMINI_API_KEY.
     app.run(debug=True, host='0.0.0.0', port=5000)
