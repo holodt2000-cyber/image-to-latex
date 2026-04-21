@@ -1,35 +1,31 @@
 from flask import Flask, render_template, request, jsonify
 import os
+import re  # ДОБАВЛЕНО: Без этого re.sub выдает ошибку!
 from werkzeug.utils import secure_filename
 import base64
-# Подключаем актуальное SDK Google GenAI (стандарт апреля 2026)
-try:
-    from google import genai
-    from google.genai import types
-except ImportError:
-    print("Ошибка: Установите актуальное SDK: pip install -U google-genai")
-    exit(1)
-
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения (.env файл)
+# Загружаем переменные
 load_dotenv()
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+# Render использует временную папку /tmp для записи, если нет постоянного диска
+app.config['UPLOAD_FOLDER'] = '/tmp' if os.environ.get('RENDER') else 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Инициализация клиента Gemini
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+# Инициализация клиента
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 gemini_client = None
 
 if GEMINI_API_KEY:
-    # Используем API ключ из .env
+    # Важно: Для Render не указываем никакие прокси!
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 else:
-    print("ВНИМАНИЕ: GEMINI_API_KEY не найден в .env файле. Конвертация работать не будет.")
+    print("ВНИМАНИЕ: Ключ API не найден.")
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
 
