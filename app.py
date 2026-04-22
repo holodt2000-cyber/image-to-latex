@@ -72,14 +72,20 @@ def convert_image():
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
+    # Инициализируем флаги ДО входа в цикл
+    success = False
+    latex_code = ""
+
     try:
         file.save(filepath)
         
-        # Кодируем в base64 для передачи в Groq
         with open(filepath, "rb") as img_file:
             base64_image = base64.b64encode(img_file.read()).decode('utf-8')
+
+        # Цикл по моделям
         for model in MODELS_PRIORITY:
             try:
+                print(f"Пробую модель: {model}...")
                 response = client.chat.completions.create(
                     model=model,
                     extra_headers={
@@ -90,26 +96,41 @@ def convert_image():
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": f"{SYSTEM_PROMPT}\n\nОцифруй это изображение в TikZ. Только код."},
+                                {"type": "text", "text": f"{SYSTEM_PROMPT}\n\nЗАДАНИЕ: Оцифруй это изображение в TikZ. Верни ТОЛЬКО код."},
                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                             ],
                         }
                     ],
                     temperature=0.0,
-                    timeout=25  # Чтобы не ждать вечно
+                    timeout=30  
                 )
-                latex_code = response.choices[0].message.content
-                success = True
-                break  # Если запрос прошел, выходим из цикла
+                
+                content = response.choices[0].message.content
+                if content:
+                    latex_code = content
+                    success = True
+                    print(f"Успех с моделью: {model}")
+                    break 
+                    
             except Exception as e:
-                print(f"Модель {model} выдала ошибку: {e}. Пробую следующую...")
+                print(f"Модель {model} не справилась: {str(e)}")
                 continue
 
         if not success:
-            return jsonify({'error': 'Все бесплатные модели сейчас перегружены. Попробуйте через минуту.'}), 503
+            return jsonify({'error': 'Все бесплатные модели сейчас перегружены или недоступны.'}), 503
+
+        # Очистка кода от Markdown-мусора (на случай, если модель проигнорировала промпт)
+        latex_code = re.sub(r'^```latex\s*', '', latex_code, flags=re.MULTILINE)
+        latex_code = re.sub(r'```$', '', latex_code, flags=re.MULTILINE)
+        
+        # Если модель добавила текст ДО \documentclass, обрезаем его
+        if r"\documentclass" in latex_code:
+            latex_code = latex_code[latex_code.find(r"\documentclass"):]
+
+        return jsonify({'success': True, 'latex': latex_code.strip()})
 
     except Exception as e:
-        return jsonify({'error': f"Ошибка Groq: {str(e)}"}), 500
+        return jsonify({'error': f"Критическая ошибка сервера: {str(e)}"}), 500
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
