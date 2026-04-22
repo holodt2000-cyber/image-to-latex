@@ -26,6 +26,12 @@ SYSTEM_PROMPT = r"""
 - СТРОГО: Никакого Markdown-оформления (без кавычек ```).
 - Только чистый, готовый к компиляции код.
 - Сохраняй язык надписей с эскиза.
+# Дополнение к блоку ГЕОМЕТРИЯ:
+- ЗАПРЕЩЕНО использовать сложные вычисления точек типа `intersection of`. 
+- Используй только простые координаты: (0,0), (3,3) и т.д.
+- ЗАПРЕЩЕНО добавлять элементы, которых нет на эскизе (оси координат, пружины, лишние пунктирные линии).
+- Если видишь платформу (ступеньку) — рисуй её как `(0,0) -- (0,H) -- (L,H) -- (L+S, 0)`.
+- Текст подписей пиши в `\node`, НЕ используя математический режим $...$ для обычных слов (пиши {брусок}, а не {$брусок$}).
 """
 
 
@@ -41,11 +47,11 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Инициализация Groq
 client = OpenAI(
     api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1"
+    base_url="https://openrouter.ai/api/v1"
 )
 
 # АКТУАЛЬНАЯ МОДЕЛЬ 2026
-MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_ID = "qwen/qwen-3-next-80b-a3b-instruct:free"
 @app.route('/')
 def index():
     return render_template('index.html')
