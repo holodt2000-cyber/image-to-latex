@@ -32,7 +32,13 @@ SYSTEM_PROMPT = r"""
 - Математика: только для переменных типа {$H$}, {$v$}, {$m$}.
 """
 
-
+# Очередь моделей: если первая занята, идем ко второй
+MODELS_PRIORITY = [
+    "google/gemma-3-27b-it:free",      # Приоритет 1 (лучшая)
+    "google/gemma-3-12b-it:free",      # Приоритет 2
+    "meta-llama/llama-3.2-11b-vision-instruct:free", # Приоритет 3 (очень стабильная)
+    "google/gemini-flash-1.5-8b:free"  # Приоритет 4 (последний шанс)
+]
 
 
 
@@ -72,32 +78,35 @@ def convert_image():
         # Кодируем в base64 для передачи в Groq
         with open(filepath, "rb") as img_file:
             base64_image = base64.b64encode(img_file.read()).decode('utf-8')
-
-        # Запрос к Groq
-        response = client.chat.completions.create(
-            model=MODEL_ID,
-            messages=[{"role": "user", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Преобразуй это изображение в экспертный код LaTeX/TikZ. Верни ТОЛЬКО код."},
+        for model in MODELS_PRIORITY:
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    extra_headers={
+                        "HTTP-Referer": "https://render.com",
+                        "X-Title": "TikZ Converter",
+                    },
+                    messages=[
                         {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"{SYSTEM_PROMPT}\n\nОцифруй это изображение в TikZ. Только код."},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                            ],
                         }
                     ],
-                }
-            ],
-            temperature=0.0 # Для точности кода
-        )
+                    temperature=0.0,
+                    timeout=25  # Чтобы не ждать вечно
+                )
+                latex_code = response.choices[0].message.content
+                success = True
+                break  # Если запрос прошел, выходим из цикла
+            except Exception as e:
+                print(f"Модель {model} выдала ошибку: {e}. Пробую следующую...")
+                continue
 
-        latex_code = response.choices[0].message.content
-        
-        # Очистка от Markdown
-        latex_code = re.sub(r'^```latex\s*', '', latex_code, flags=re.MULTILINE)
-        latex_code = re.sub(r'```$', '', latex_code, flags=re.MULTILINE)
-
-        return jsonify({'success': True, 'latex': latex_code.strip()})
+        if not success:
+            return jsonify({'error': 'Все бесплатные модели сейчас перегружены. Попробуйте через минуту.'}), 503
 
     except Exception as e:
         return jsonify({'error': f"Ошибка Groq: {str(e)}"}), 500
