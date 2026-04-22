@@ -19,8 +19,7 @@ client = OpenAI(
 )
 
 # АКТУАЛЬНАЯ МОДЕЛЬ 2026
-MODEL_ID = "llama-3.2-11b-vision-preview"
-
+MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 @app.route('/')
 def index():
     return render_template('index.html')
