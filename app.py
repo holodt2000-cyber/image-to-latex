@@ -51,7 +51,7 @@ client = OpenAI(
 )
 
 # АКТУАЛЬНАЯ МОДЕЛЬ 2026
-MODEL_ID = "qwen/qwen3-next-80b-a3b-instruct:free"
+MODEL_ID = "google/gemini-flash-1.5-8b:free"
 @app.route('/')
 def index():
     return render_template('index.html')
