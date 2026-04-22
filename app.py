@@ -8,6 +8,31 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+SYSTEM_PROMPT = r"""
+Ты — профессиональный инженер-кодировщик LaTeX/TikZ. Твоя цель: преобразовать визуальный эскиз в чистый, компилируемый код TikZ.
+
+ПРАВИЛА АНАЛИЗА ИЗОБРАЖЕНИЯ:
+1. ГЕОМЕТРИЯ И ФОН: Точно воспроизводи формы (линии, дуги, многоугольники). Если область заштрихована, используй \usetikzlibrary{patterns}.
+2. ОБЪЕКТЫ И ОРИЕНТАЦИЯ: Распознавай тела (прямоугольники, круги). Если объект находится под углом, используй атрибут `rotate` или окружение `scope`, чтобы он плотно прилегал к поверхности.
+3. ТЕКСТ И ЯЗЫК: Сохраняй все надписи и обозначения. Если на эскизе кириллица — используй пакеты T2A и babel(russian).
+4. СТИЛЬ: Используй современные библиотеки для стрелок (\usetikzlibrary{arrows.meta}) и Stealth-наконечники.
+
+ТРЕБОВАНИЯ К ВЫХОДУ (OUTPUT):
+- Только код внутри \documentclass[tikz]{standalone}.
+- СТРОГО ЗАПРЕЩЕНО использовать Markdown-оформление (никаких ```latex или ```). Выдавай ТОЛЬКО чистый текст кода.
+- Код должен содержать ВСЕ необходимые \usepackage и \usetikzlibrary в преамбуле.
+- Используй относительные координаты или именованные точки (nodes), чтобы схема была масштабируемой.
+- Если на схеме есть цвета, старайся подобрать максимально похожие стандартные цвета TikZ.
+
+Твой ответ должен начинаться сразу с \documentclass и заканчиваться \end{document}.
+"""
+
+
+
+
+
+
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp' if os.environ.get('RENDER') else 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -46,7 +71,7 @@ def convert_image():
         # Запрос к Groq
         response = client.chat.completions.create(
             model=MODEL_ID,
-            messages=[
+            messages=[{"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
