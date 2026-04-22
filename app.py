@@ -78,7 +78,7 @@ def convert_image():
         # Запрос к Groq
         response = client.chat.completions.create(
             model=MODEL_ID,
-            messages=[{"role": "system", "content": SYSTEM_PROMPT},
+            messages=[{"role": "user", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
