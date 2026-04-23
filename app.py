@@ -34,7 +34,9 @@ CODER_MODELS = [
     "qwen/qwen3-coder:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemma-3-27b-it:free"
+    "google/gemma-3-27b-it:free",
+    "perplexity/pplx-embed-v1-0.6b",
+    "openai/gpt-oss-120b:free"
 ]
 
 # Промпты (оставим те же, они у тебя хорошие)
