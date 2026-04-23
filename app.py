@@ -26,8 +26,7 @@ VISION_MODELS = [
     "google/gemma-3-4b-it:free",
     "google/gemma-3n-e4b-it:free",
     "qwen/qwen3-coder:free",
-    "openai/gpt-oss-120b:free",
-    "qwen/qwen3-next-80b-a3b-instruct:free"
+    "openai/gpt-oss-120b:free"
 
 ]
 
