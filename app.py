@@ -36,7 +36,8 @@ CODER_MODELS = [
     "meta-llama/llama-3.3-70b-instruct:free",
     "google/gemma-3-27b-it:free",
     "perplexity/pplx-embed-v1-0.6b",
-    "openai/gpt-oss-120b:free"
+    "openai/gpt-oss-120b:free",
+    "openai/gpt-oss-20b:free"
 ]
 
 # Промпты (оставим те же, они у тебя хорошие)
