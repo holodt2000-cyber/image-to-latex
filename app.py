@@ -2,62 +2,50 @@ from flask import Flask, render_template, request, jsonify
 import os
 import re
 import base64
-from openai import OpenAI  # Используем стандарт OpenAI
+from openai import OpenAI
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SYSTEM_PROMPT = r"""
-Ты — узкоспециализированный ИИ-ассистент по переводу физических схем в код LaTeX/TikZ. 
-
- 1. ГЕОМЕТРИЧЕСКАЯ ЛОГИКА (АЛГОРИТМ):
-- СНАЧАЛА определи координаты поверхности (пол, ступенька, спуск).
-- ИСПОЛЬЗУЙ единый массив точек для контура поверхности. Например: (0,0) -- (0,3) -- (3,3) -- (7,0) -- (10,0).
-- ШТРИХОВКА: Используй команду \fill[pattern=north west lines] для замкнутой фигуры, которая включает поверхность И "подвал" (землю), чтобы заштриховать область ПОД линией.
-- ЗАПРЕТ: Не используй команду `rectangle` для поверхностей, она создает разрывы.
-
- 2. ПРАВИЛА ПОЗИЦИОНИРОВАНИЯ:
-- ДЛЯ ВСЕХ ТЕЛ (бруски, грузы, толкатели): Используй `\node[anchor=south]`. Это гарантирует, что объект стоит НА поверхности, а не пересекает её центром.
-- ДЛЯ ТЕЛ НА СКЛОНЕ: Используй библиотеку `calc`. Формат: `at ($(ТочкаА)!0.5!(ТочкаБ)$)`. Это исключит "висение" объекта в воздухе.
-- СТРЕЛКИ: Рисуй векторы скоростей/сил из центров объектов (`node.center`) через относительные координаты `++(x,y)`.
-
- 3. ТЕХНИЧЕСКИЙ СТЭК:
-- ПРЕАМБУЛА: СТРОГО \usetikzlibrary{arrows.meta, patterns, calc}.
-- СТИЛИ: Используй `\tikzset` для настройки Stealth-стрелок и толщины линий.
-- ТЕКСТ: Кириллицу пиши в обычных скобках {брусок}. Математику ($m, v, H$) — в долларах.
-
- 4. ОГРАНИЧЕНИЯ (STRICT):
-- Начинай ответ СРАЗУ с \documentclass.
-- НИКАКИХ комментариев, вежливых фраз и Markdown-разметки (```).
-- ЗАПРЕЩЕНО использовать библиотеку `decorations` (никаких пружин/snake).
-- Если на эскизе есть элементы, которых нет в физике (оси, сетка) — ИГНОРИРУЙ их.
-"""
-
-# Очередь моделей: если первая занята, идем ко второй
-MODELS_PRIORITY = [
-    "google/gemma-3-27b-it:free",      # Приоритет 1 (лучшая)
-    "google/gemma-3-12b-it:free",      # Приоритет 2
-    "meta-llama/llama-3.2-11b-vision-instruct:free", # Приоритет 3 (очень стабильная)
-    "google/gemini-flash-1.5-8b:free"  # Приоритет 4 (последний шанс)
-]
-
-
-
-
-
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp' if os.environ.get('RENDER') else 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Инициализация Groq
 client = OpenAI(
     api_key=os.environ.get("GROQ_API_KEY"),
     base_url="https://openrouter.ai/api/v1"
 )
 
-# АКТУАЛЬНАЯ МОДЕЛЬ 2026
-MODEL_ID = "google/gemma-3-27b-it:free"
+SYSTEM_PROMPT = r"""
+Ты — узкоспециализированный ИИ-ассистент по переводу физических схем в код LaTeX/TikZ. 
+
+1. ГЕОМЕТРИЧЕСКАЯ ЛОГИКА:
+- СНАЧАЛА определи координаты поверхности. Пример: (0,0) -- (0,3) -- (3,3) -- (7,0) -- (10,0).
+- ШТРИХОВКА: Используй \fill[pattern=north west lines] для замкнутой фигуры ПОД линией поверхности (включая "землю").
+- ЗАПРЕТ: Не используй `rectangle` для поверхностей.
+
+2. ПРАВИЛА ПОЗИЦИОНИРОВАНИЯ:
+- ТЕЛА: Используй `\node[anchor=south]`.
+- ТЕЛА НА СКЛОНЕ: Используй библиотеку `calc`: `at ($(A)!0.5!(B)$)`.
+- СТРЕЛКИ: Рисуй векторы из центров (`node.center`) через `++(x,y)`.
+
+3. ТЕХНИЧЕСКИЙ СТЭК:
+- ПРЕАМБУЛА: \usetikzlibrary{arrows.meta, patterns, calc}.
+- ТЕКСТ: Кириллицу пиши в скобках {брусок}.
+
+4. ОГРАНИЧЕНИЯ:
+- Начинай СРАЗУ с \documentclass. Никакой разметки ```.
+- ЗАПРЕЩЕНО использовать `decorations` (snake/spring).
+"""
+
+# Модели для кодинга (текстовые)
+CODER_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-3-27b-it:free",
+    "meta-llama/llama-3.2-11b-vision-instruct:free"
+]
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -74,69 +62,74 @@ def convert_image():
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
-    # Инициализируем флаги ДО входа в цикл
     success = False
     latex_code = ""
 
     try:
         file.save(filepath)
-        
         with open(filepath, "rb") as img_file:
             base64_image = base64.b64encode(img_file.read()).decode('utf-8')
 
-        # Цикл по моделям
-        for model in MODELS_PRIORITY:
+        # ШАГ 1: Описание (Vision)
+        try:
+            vision_response = client.chat.completions.create(
+                model="google/gemini-flash-1.5-8b:free",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Опиши физическую схему очень подробно: 1. Высота H. 2. Длина горизонтальной части. 3. Угол или длина спуска. 4. Точные объекты и их названия (брусок, шар, толкатель)."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
+                }],
+                timeout=30
+            )
+            description = vision_response.choices[0].message.content
+        except Exception as e:
+            return jsonify({'error': f"Ошибка распознавания (Vision): {str(e)}"}), 500
+
+        # ШАГ 2: Генерация кода (Coder)
+        for model in CODER_MODELS:
             try:
-                print(f"Пробую модель: {model}...")
-                response = client.chat.completions.create(
+                print(f"Попытка кодинга с моделью: {model}")
+                final_response = client.chat.completions.create(
                     model=model,
                     extra_headers={
-                        "HTTP-Referer": "https://render.com",
-                        "X-Title": "TikZ Converter",
+                        "HTTP-Referer": "[https://render.com](https://render.com)",
+                        "X-Title": "TikZ Converter Pipeline",
                     },
                     messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": f"{SYSTEM_PROMPT}\n\nЗАДАНИЕ: Оцифруй это изображение в TikZ. Верни ТОЛЬКО код."},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                            ],
-                        }
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": f"Напиши TikZ код по этому описанию схемы:\n{description}"}
                     ],
-                    temperature=0.0,
-                    timeout=30  
+                    temperature=0.0
                 )
                 
-                content = response.choices[0].message.content
-                if content:
+                content = final_response.choices[0].message.content
+                if content and r"\documentclass" in content:
                     latex_code = content
                     success = True
-                    print(f"Успех с моделью: {model}")
-                    break 
-                    
+                    break
             except Exception as e:
-                print(f"Модель {model} не справилась: {str(e)}")
+                print(f"Модель {model} не справилась: {e}")
                 continue
 
         if not success:
-            return jsonify({'error': 'Все бесплатные модели сейчас перегружены или недоступны.'}), 503
+            return jsonify({'error': 'Модели-кодеры перегружены.'}), 503
 
-        # Очистка кода от Markdown-мусора (на случай, если модель проигнорировала промпт)
-        latex_code = re.sub(r'^```latex\s*', '', latex_code, flags=re.MULTILINE)
-        latex_code = re.sub(r'```$', '', latex_code, flags=re.MULTILINE)
+        # Очистка и доработка
+        latex_code = re.sub(r'^```latex\s*|```', '', latex_code, flags=re.MULTILINE)
         
-        # Если модель добавила текст ДО \documentclass, обрезаем его
-        # Если модель забыла \usetikzlibrary, мы добавим её сами
         required_preamble = r"\usetikzlibrary{arrows.meta, patterns, calc}"
         if required_preamble not in latex_code:
             latex_code = latex_code.replace(r"\begin{document}", required_preamble + "\n" + r"\begin{document}")
+            
         if r"\documentclass" in latex_code:
             latex_code = latex_code[latex_code.find(r"\documentclass"):]
 
         return jsonify({'success': True, 'latex': latex_code.strip()})
 
     except Exception as e:
-        return jsonify({'error': f"Критическая ошибка сервера: {str(e)}"}), 500
+        return jsonify({'error': f"Критическая ошибка: {str(e)}"}), 500
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
