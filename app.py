@@ -84,11 +84,11 @@ def convert_image():
         # ШАГ 1: Описание (Vision)
         try:
             vision_response = client.chat.completions.create(
-                model="google/gemini-flash-1.5-8b",
+                model="google/gemma-4-31b-it:free",
                 messages=[{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": VISION_PROMPT},
+                        {"type": "text", "text": VISION_PROMPT },
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ]
                 }],
