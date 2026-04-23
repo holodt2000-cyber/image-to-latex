@@ -51,12 +51,18 @@ VISION_PROMPT = r"""
 Пиши сухими геометрическими фактами.
 """
 # Модели для кодинга (текстовые)
+# Список Vision-моделей (Глаза)
+VISION_MODELS = [
+    "google/gemini-flash-1.5-8b:free",
+    "meta-llama/llama-3.2-11b-vision-instruct:free",
+    "google/gemini-2.0-flash-exp:free"
+]
+
+# Модели для кодинга (Текстовые)
 CODER_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free", # Самый мощный бесплатный кодер
     "google/gemma-3-27b-it:free",
-    "qwen/qwen3-next-80b-a3b-instruct:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemma-3-27b-it:free",
-    "meta-llama/llama-3.2-11b-vision-instruct:free"
+    "qwen/qwen-2.5-72b-instruct:free"
 ]
 
 @app.route('/')
@@ -78,27 +84,41 @@ def convert_image():
     success = False
     latex_code = ""
 
+    success = False
+    vision_success = False
+    description = ""
+    latex_code = ""
+
     try:
         file.save(filepath)
         with open(filepath, "rb") as img_file:
             base64_image = base64.b64encode(img_file.read()).decode('utf-8')
 
-        # ШАГ 1: Описание (Vision)
-        try:
-            vision_response = client.chat.completions.create(
-                model="google/gemma-4-31b-it:free",
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": VISION_PROMPT },
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                }],
-                timeout=30
-            )
-            description = vision_response.choices[0].message.content
-        except Exception as e:
-            return jsonify({'error': f"Ошибка распознавания (Vision): {str(e)}"}), 500
+        # ШАГ 1: Описание (Vision) — ТЕПЕРЬ С ЦИКЛОМ
+        for v_model in VISION_MODELS:
+            try:
+                print(f"Попытка распознавания через: {v_model}")
+                vision_response = client.chat.completions.create(
+                    model=v_model,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": VISION_PROMPT },
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]
+                    }],
+                    timeout=25
+                )
+                description = vision_response.choices[0].message.content
+                if description:
+                    vision_success = True
+                    break
+            except Exception as e:
+                print(f"Vision модель {v_model} выдала ошибку: {e}")
+                continue
+
+        if not vision_success:
+            return jsonify({'error': "Все Vision-модели перегружены (429). Повторите через минуту."}), 503
 
         # ШАГ 2: Генерация кода (Coder)
         for model in CODER_MODELS:
@@ -107,14 +127,15 @@ def convert_image():
                 final_response = client.chat.completions.create(
                     model=model,
                     extra_headers={
-                        "HTTP-Referer": "[https://render.com](https://render.com)",
+                        "HTTP-Referer": "https://render.com",
                         "X-Title": "TikZ Converter Pipeline",
                     },
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": f"Напиши TikZ код по этому описанию схемы:\n{description}"}
                     ],
-                    temperature=0.0
+                    temperature=0.0,
+                    timeout=40
                 )
                 
                 content = final_response.choices[0].message.content
@@ -123,9 +144,8 @@ def convert_image():
                     success = True
                     break
             except Exception as e:
-                print(f"Модель {model} не справилась: {e}")
+                print(f"Модель кодирования {model} не справилась: {e}")
                 continue
-
         if not success:
             return jsonify({'error': 'Модели-кодеры перегружены.'}), 503
 
