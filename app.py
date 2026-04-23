@@ -22,7 +22,13 @@ client = OpenAI(
 VISION_MODELS = [
     "google/gemini-flash-1.5-8b:free",
     "meta-llama/llama-3.2-11b-vision-instruct:free",
-    "google/gemini-2.0-flash-exp:free"
+    "google/gemma-3-27b-it:free",
+    "google/gemma-3-4b-it:free",
+    "google/gemma-3n-e4b-it:free",
+    "qwen/qwen3-coder:free",
+    "openai/gpt-oss-120b:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free"
+
 ]
 
 CODER_MODELS = [
