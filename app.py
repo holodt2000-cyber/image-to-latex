@@ -52,6 +52,8 @@ VISION_PROMPT = r"""
 """
 # Модели для кодинга (текстовые)
 CODER_MODELS = [
+    "google/gemma-3-27b-it:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
     "meta-llama/llama-3.3-70b-instruct:free",
     "google/gemma-3-27b-it:free",
     "meta-llama/llama-3.2-11b-vision-instruct:free"
