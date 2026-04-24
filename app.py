@@ -15,28 +15,19 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 client = OpenAI(
     api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://openrouter.ai/api/v1"
+    base_url="https://api.sambanova.ai/v1"
 )
 
 # --- МОДЕЛИ (Free) ---
+# Обновленные списки с учетом твоих скриншотов
 VISION_MODELS = [
-    "google/gemini-flash-1.5-8b:free",
-    "meta-llama/llama-3.2-11b-vision-instruct:free",
-    "google/gemma-3-27b-it:free",
-    "google/gemma-3-4b-it:free",
-    "google/gemma-3n-e4b-it:free",
-    "qwen/qwen3-coder:free",
-    "openai/gpt-oss-120b:free"
-
+    "gemma-3-12b-it",
+    "Llama-4-Maverick-17B-128E-Instruct"
 ]
 
 CODER_MODELS = [
-    "qwen/qwen3-coder:free",
-    "qwen/qwen3-next-80b-a3b-instruct:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemma-3-27b-it:free",
-    "perplexity/pplx-embed-v1-0.6b",
-    "minimax/minimax-m2.5:free"
+    "DeepSeek-V3.2"
+    
 ]
 
 # Промпты (оставим те же, они у тебя хорошие)
@@ -64,8 +55,6 @@ SYSTEM_PROMPT = r"""
 - Начинай СРАЗУ с \documentclass. Без Markdown разметки.
 
 """
-
-
 
 VISION_PROMPT = r"""
 Проанализируй физическую схему и составь техническое описание для TikZ.
