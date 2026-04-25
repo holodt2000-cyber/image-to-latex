@@ -36,7 +36,39 @@
             <div class="spinner"></div>
             <p>Обработка изображения...</p>
         </div>
+        <div id="debug-panel" style="margin-top: 20px; padding: 15px; background: #f0f4f8; border-left: 5px solid #007bff; border-radius: 4px; display: none;">
+    <h4 style="margin-top: 0; color: #007bff;">👁️ Vision Debug: Что увидела нейронка</h4>
+    <p id="debug-text" style="font-family: 'Courier New', Courier, monospace; font-size: 14px; white-space: pre-wrap; color: #333;"></p>
+</div>
 
+<script>
+// В твоей функции fetch('/convert', ...)
+async function convert() {
+    const debugPanel = document.getElementById('debug-panel');
+    const debugText = document.getElementById('debug-text');
+    
+    // Скрываем старые данные перед новым запросом
+    debugPanel.style.display = 'none';
+
+    try {
+        const response = await fetch('/convert', { method: 'POST', body: formData });
+        const data = await response.json();
+
+        if (data.success) {
+            // Показываем плашку и текст
+            debugPanel.style.display = 'block';
+            debugText.innerText = data.debug_description;
+            
+            // Твой основной код вывода LaTeX
+            document.getElementById('latex-output').value = data.latex;
+        } else {
+            alert("Ошибка: " + data.error);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+</script>
         <div id="result" class="result hidden">
             <h3>TikZ код:</h3>
             <div class="latex-code">

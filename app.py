@@ -160,7 +160,11 @@ def convert_image():
         if r"\documentclass" in latex_code:
             latex_code = latex_code[latex_code.find(r"\documentclass"):]
 
-        return jsonify({'success': True, 'latex': latex_code.strip()})
+        return jsonify({'success': True,
+                        'latex': latex_code.strip(),
+                        'debug_description': description
+                        
+                        })
 
     except Exception as e:
         # Это поймает ошибки самого Python (например, проблемы с файловой системой)
