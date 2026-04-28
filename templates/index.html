@@ -246,9 +246,10 @@
 
         <div id="result" class="result-box hidden">
             <h3>TikZ код:</h3>
-            <textarea id="latexOutput" readonly></textarea>
+            <textarea id="latexOutput"></textarea>
             <div class="result-buttons">
                 <button id="copyBtn" class="btn" style="background:#28a745;">Копировать</button>
+                <button id="refineBtn" class="btn" style="background:#e67e22;">Исправить код</button>
                 <button id="overleafBtn" class="btn btn-overleaf">Открыть в Overleaf</button>
             </div>
         </div>
@@ -268,6 +269,7 @@
         const latexOutput = document.getElementById('latexOutput');
         const copyBtn = document.getElementById('copyBtn');
         const overleafBtn = document.getElementById('overleafBtn');
+        const refineBtn = document.getElementById('refineBtn');
         const instructionsInput = document.getElementById('instructionsInput');
 
         uploadArea.addEventListener('click', () => imageInput.click());
@@ -352,60 +354,7 @@
                     throw new Error(err.error || `Ошибка: ${response.status}`);
                 }
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                // Показываем результат сразу — код будет появляться по мере стрима
-                resultBox.classList.remove('hidden');
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // Оставляем незавершённую строку
-
-                    for (const line of lines) {
-                        if (!line.startsWith('data: ')) continue;
-                        const jsonStr = line.slice(6);
-                        if (!jsonStr) continue;
-
-                        try {
-                            const data = JSON.parse(jsonStr);
-
-                            if (data.chunk) {
-                                // Стриминг — добавляем текст по мере получения
-                                latexOutput.value += data.chunk;
-                                latexOutput.scrollTop = latexOutput.scrollHeight;
-                                loadingText.textContent = 'Генерация...';
-                            }
-
-                            if (data.status) {
-                                streamStatus.textContent = data.status;
-                            }
-
-                            if (data.done) {
-                                // Финал — заменяем на очищенный код
-                                latexOutput.value = data.latex;
-                                loading.classList.add('hidden');
-                                convertBtn.classList.remove('hidden');
-                                return;
-                            }
-
-                            if (data.error) {
-                                throw new Error(data.error);
-                            }
-                        } catch (parseErr) {
-                            if (parseErr.message !== jsonStr) throw parseErr;
-                        }
-                    }
-                }
-
-                // Стрим закончился без done-сообщения
-                loading.classList.add('hidden');
-                convertBtn.classList.remove('hidden');
+                await handleSSEStream(response);
 
             } catch (e) {
                 console.error("Error:", e);
@@ -424,6 +373,106 @@
                 copyBtn.textContent = 'Копировать';
                 copyBtn.style.background = '#28a745';
             }, 2000);
+        });
+
+        // Общая функция для чтения SSE-стрима
+        async function handleSSEStream(response) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            resultBox.classList.remove('hidden');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    const jsonStr = line.slice(6);
+                    if (!jsonStr) continue;
+
+                    try {
+                        const data = JSON.parse(jsonStr);
+
+                        if (data.chunk) {
+                            latexOutput.value += data.chunk;
+                            latexOutput.scrollTop = latexOutput.scrollHeight;
+                            loadingText.textContent = 'Генерация...';
+                        }
+
+                        if (data.status) {
+                            streamStatus.textContent = data.status;
+                        }
+
+                        if (data.done) {
+                            latexOutput.value = data.latex;
+                            loading.classList.add('hidden');
+                            convertBtn.classList.remove('hidden');
+                            refineBtn.disabled = false;
+                            return;
+                        }
+
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                    } catch (parseErr) {
+                        if (parseErr.message !== jsonStr) throw parseErr;
+                    }
+                }
+            }
+
+            loading.classList.add('hidden');
+            convertBtn.classList.remove('hidden');
+            refineBtn.disabled = false;
+        }
+
+        // Исправить код — отправляем существующий код + пожелания
+        refineBtn.addEventListener('click', async () => {
+            const code = latexOutput.value.trim();
+            const instructions = instructionsInput.value.trim();
+
+            if (!code) {
+                alert('Нет кода для исправления');
+                return;
+            }
+            if (!instructions) {
+                alert('Напишите пожелания в поле справа');
+                return;
+            }
+
+            loading.classList.remove('hidden');
+            refineBtn.disabled = true;
+            convertBtn.classList.add('hidden');
+            streamStatus.textContent = '';
+            loadingText.textContent = 'Исправляю код...';
+            latexOutput.value = '';
+
+            try {
+                const response = await fetch('/refine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, instructions })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || `Ошибка: ${response.status}`);
+                }
+
+                await handleSSEStream(response);
+
+            } catch (e) {
+                console.error("Refine error:", e);
+                alert("Ошибка: " + e.message);
+                loading.classList.add('hidden');
+                convertBtn.classList.remove('hidden');
+                refineBtn.disabled = false;
+            }
         });
 
         overleafBtn.addEventListener('click', () => {

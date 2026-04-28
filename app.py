@@ -201,6 +201,107 @@ def convert():
         traceback.print_exc()
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
+REFINE_PROMPT = r"""/no_think
+You are a TikZ LaTeX expert. The user has existing TikZ code and wants modifications.
+
+RULES:
+- Output the COMPLETE modified LaTeX code (not a diff, not partial)
+- Keep \documentclass[tikz,border=10pt]{standalone}
+- Preserve existing structure, only change what was requested
+- Keep code clean, well-indented, and complete
+
+Output ONLY the LaTeX code. No markdown fences, no explanations."""
+
+@app.route('/refine', methods=['POST'])
+def refine():
+    data = request.get_json()
+    code = (data or {}).get('code', '').strip()
+    instructions = (data or {}).get('instructions', '').strip()
+
+    if not code:
+        return jsonify({'error': 'Нет кода для исправления'}), 400
+    if not instructions:
+        return jsonify({'error': 'Укажите пожелания'}), 400
+
+    try:
+        messages = [
+            {
+                "role": "user",
+                "content": f"{REFINE_PROMPT}\n\nHere is the current TikZ code:\n```\n{code}\n```\n\nUSER INSTRUCTIONS:\n{instructions}"
+            }
+        ]
+
+        def stream_one_request(msgs):
+            text_out = ""
+            stream = hf_client.chat_completion(
+                model=MODEL_ID,
+                messages=msgs,
+                max_tokens=8192,
+                stream=True
+            )
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                text = getattr(delta, 'content', '') or ''
+                if text:
+                    text_out += text
+                    yield text
+
+        def is_complete(code):
+            return r'\end{document}' in code
+
+        def generate():
+            full_content = ""
+            MAX_CONTINUATIONS = 5
+
+            for attempt in range(3):
+                try:
+                    yield f"data: {json.dumps({'status': 'Исправляю код...'})}\n\n"
+                    for text in stream_one_request(messages):
+                        full_content += text
+                        yield f"data: {json.dumps({'chunk': text})}\n\n"
+                    break
+                except Exception as api_err:
+                    err_str = str(api_err)
+                    if "503" in err_str or "504" in err_str:
+                        wait = 15 * (attempt + 1)
+                        yield f"data: {json.dumps({'status': f'Модель загружается, повтор через {wait}с...'})}\n\n"
+                        time.sleep(wait)
+                    else:
+                        yield f"data: {json.dumps({'error': str(api_err)})}\n\n"
+                        return
+            else:
+                yield f"data: {json.dumps({'error': 'Не удалось подключиться после 3 попыток'})}\n\n"
+                return
+
+            continuation = 0
+            while not is_complete(full_content) and continuation < MAX_CONTINUATIONS:
+                continuation += 1
+                yield f"data: {json.dumps({'status': f'Код обрезан, продолжаю ({continuation}/{MAX_CONTINUATIONS})...'})}\n\n"
+                cont_messages = [
+                    messages[0],
+                    {"role": "assistant", "content": full_content},
+                    {"role": "user", "content": "/no_think\nYour code was cut off. Continue EXACTLY from where you stopped. Output ONLY the remaining code."}
+                ]
+                try:
+                    for text in stream_one_request(cont_messages):
+                        full_content += text
+                        yield f"data: {json.dumps({'chunk': text})}\n\n"
+                except Exception as e:
+                    break
+
+            clean_code = clean_latex(full_content)
+            yield f"data: {json.dumps({'done': True, 'latex': clean_code})}\n\n"
+
+        return Response(generate(), mimetype='text/event-stream')
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Error: {str(e)}'}), 500
+
 if __name__ == '__main__':
     print("=" * 60)
     print("Image to TikZ Converter — Hugging Face")
