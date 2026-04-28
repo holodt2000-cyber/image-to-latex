@@ -1,99 +1,81 @@
 # Image to TikZ Converter
 
-AI-powered web application for converting images to TikZ code using Hugging Face vision-language models.
+Веб-приложение для конвертации изображений в TikZ код с помощью vision-language моделей через Hugging Face Inference API.
 
-## Features
+## Возможности
 
-- 🖼️ Drag & drop or file upload
-- 📋 Paste images from clipboard (Ctrl+V)
-- 🤖 AI-powered TikZ code generation
-- 📝 One-click code copying
-- ⚡ Multiple model support for optimal quality
+- Загрузка изображений (drag & drop, выбор файла, вставка из буфера Ctrl+V)
+- Стриминг генерации кода в реальном времени
+- Поле пожеланий для уточнения генерации (цвета, стиль, подписи)
+- Исправление уже сгенерированного кода по пожеланиям
+- Открытие кода в Overleaf для компиляции и просмотра PDF
+- Автопродолжение при обрезке длинного кода
 
-## Tech Stack
+## Стек
 
 - **Backend**: Flask (Python)
-- **Frontend**: HTML, CSS, JavaScript
-- **AI**: Hugging Face Inference API
-- **Image Processing**: Pillow
+- **Frontend**: Tailwind CSS, Material Icons
+- **AI**: Hugging Face Inference API (бесплатно)
+- **Обработка изображений**: Pillow
 
-## Quick Start
+## Установка
 
-1. Clone the repository:
+1. Клонируйте репозиторий:
 ```bash
 git clone <repository-url>
 cd image-to-latex
 ```
 
-2. Install dependencies:
+2. Установите зависимости:
 ```bash
 python -m venv venv
 venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-3. Configure Hugging Face token:
+3. Настройте токен Hugging Face:
 ```bash
-# Copy example config
 cp .env.example .env
-
-# Get your token at https://huggingface.co/settings/tokens
-# Edit .env and add your token:
-HF_TOKEN=hf_your_token_here
+# Отредактируйте .env — укажите свой токен
+# Получить: https://huggingface.co/settings/tokens
 ```
 
-4. Run the application:
+4. Запустите:
 ```bash
 python app.py
-# or simply run START.bat
 ```
+Или просто запустите `START.bat`.
 
-Open http://localhost:5000 in your browser.
+Откройте http://localhost:5000
 
-## Usage
+## Использование
 
-1. Upload an image (drag & drop or Ctrl+V)
-2. Click "Convert to TikZ"
-3. Wait for processing (~30-60 seconds on first run)
-4. Copy the generated TikZ code
-5. Use in TeXmaker or Overleaf
+1. Загрузите изображение
+2. При необходимости напишите пожелания (опционально)
+3. Нажмите «Конвертировать в TikZ»
+4. Скопируйте код или откройте в Overleaf
+5. Для доработки — напишите что исправить и нажмите «Исправить код»
 
-## Supported Models
+## Модели
 
-Configure in `.env` file:
+Модель указывается в `.env` через `MODEL_ID`. Рекомендуемые:
 
-### Qwen/Qwen2-VL-72B-Instruct (default)
-- Best quality for complex diagrams
-- Excellent math formula understanding
-- Processing time: ~30-60 sec
+| Модель | Описание |
+|--------|----------|
+| `Qwen/Qwen2-VL-72B-Instruct` | Лучшее качество, сложные диаграммы |
+| `meta-llama/Llama-3.2-11B-Vision-Instruct` | Быстрее, хороший баланс |
+| `mistralai/Pixtral-12B-2409` | Математика и научные диаграммы |
 
-### meta-llama/Llama-3.2-11B-Vision-Instruct
-- Good balance of speed and quality
-- Faster than Qwen
-- Processing time: ~20-40 sec
+## Форматы изображений
 
-### mistralai/Pixtral-12B-2409
-- Specialized in math and scientific diagrams
-- High accuracy for formulas
-- Processing time: ~25-45 sec
+PNG, JPG, JPEG, GIF, BMP, WEBP
 
-Change model in `.env`:
-```bash
-MODEL_ID=meta-llama/Llama-3.2-11B-Vision-Instruct
-```
+## Решение проблем
 
-## Supported Formats
+- **401 Unauthorized** — проверьте HF_TOKEN в `.env`
+- **503 Service Unavailable** — модель загружается, подождите 30-60 сек
+- **404 Model not found** — проверьте название модели в `.env`
 
-PNG, JPG/JPEG, GIF, BMP, WEBP
-
-## Troubleshooting
-
-**401 Unauthorized**: Check your HF_TOKEN in `.env`
-
-**503 Service Unavailable**: Model is loading (wait 30-60 sec) or try another model
-
-**404 Model not found**: Verify model name in `.env`
-
-## License
+## Лицензия
 
 MIT

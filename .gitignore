@@ -41,3 +41,11 @@ checkpoints/
 
 # Environment variables
 .env
+
+# AI tools config
+.claude/
+.devin/
+AGENTS.md
+
+# Windows artifacts
+nul
