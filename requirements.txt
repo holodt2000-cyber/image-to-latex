@@ -1,6 +1,5 @@
 flask
-openai
 python-dotenv
-werkzeug
 pillow
+huggingface_hub
 gunicorn

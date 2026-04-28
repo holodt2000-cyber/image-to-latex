@@ -1,179 +1,205 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import os
 import re
 import base64
-import traceback
-from openai import OpenAI
-from werkzeug.utils import secure_filename
+import io
+import json
+import time
+from PIL import Image
 from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
 
 load_dotenv()
 
+# Отключаем системный прокси — иначе httpx рвёт соединение
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+os.environ.pop('HTTP_PROXY', None)
+os.environ.pop('HTTPS_PROXY', None)
+os.environ.pop('http_proxy', None)
+os.environ.pop('https_proxy', None)
+
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = '/tmp' if os.environ.get('RENDER') else 'uploads'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-client = OpenAI(
-    api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://api.sambanova.ai/v1"
-)
+# Hugging Face Inference API (бесплатно)
+HF_TOKEN = os.environ.get("HF_TOKEN")
+MODEL_ID = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-27B")
 
-# --- МОДЕЛИ (Free) ---
-# Обновленные списки с учетом твоих скриншотов
-VISION_MODELS = [
-    "gemma-3-12b-it",
-    "Llama-4-Maverick-17B-128E-Instruct"
-]
+if not HF_TOKEN:
+    print("ERROR: HF_TOKEN not found!")
+    print("Get FREE token at: https://huggingface.co/settings/tokens")
+else:
+    print("HF Token: OK")
 
-CODER_MODELS = [
-    "DeepSeek-V3.2"
-    
-]
+hf_client = InferenceClient(token=HF_TOKEN, timeout=180)
 
-# Промпты (оставим те же, они у тебя хорошие)
-# --- ПРОМПТЫ ---
+# Универсальный промпт для любых изображений
+SYSTEM_PROMPT = r"""/no_think
+You are a TikZ LaTeX expert. Convert the image into clean, professional TikZ code.
 
-SYSTEM_PROMPT = r"""
+RULES:
+- Start with \documentclass[tikz,border=10pt]{standalone}
+- Include all needed \usetikzlibrary (patterns, arrows.meta, decorations, etc.)
+- Use \def for key dimensions so the diagram is easy to rescale
+- Use pattern=north west lines for hatched/shaded surfaces
+- Use \filldraw for filled shapes, proper arrow styles (>=Stealth)
+- Add short comments for each logical section
+- Reproduce colors, labels, arrows, and annotations from the image
+- Keep code clean, well-indented, and complete
 
-Ты — узкоспециализированный ИИ-ассистент по переводу физических схем в код LaTeX/TikZ.
+Output ONLY the LaTeX code. No markdown fences, no explanations."""
 
-1. ГЕОМЕТРИЧЕСКАЯ ЛОГИКА:
-- СНАЧАЛА определи координаты поверхности. Пример: (0,0) -- (0,3) -- (3,3).
-- ШТРИХОВКА: Используй \fill[pattern=north west lines] для фигур ПОД линией поверхности.
-- ЗАПРЕТ: Не используй `rectangle` для поверхностей.
+def process_image(file):
+    img = Image.open(file)
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+    img.thumbnail((512, 512))
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=75)
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-2. ПРАВИЛА ПОЗИЦИОНИРОВАНИЯ:
-- ТЕЛА: Используй `\node[anchor=south]`.
-- ТЕЛА НА СКЛОНЕ: Используй библиотеку `calc`: `at ($(A)!0.5!(B)$)`.
-- СТРЕЛКИ: Рисуй векторы из центров (`node.center`).
+def clean_latex(code):
+    code = re.sub(r'^```latex\s*', '', code, flags=re.MULTILINE)
+    code = re.sub(r'^```\s*', '', code, flags=re.MULTILINE)
+    code = re.sub(r'```$', '', code, flags=re.MULTILINE)
 
-3. ТЕХНИЧЕСКИЙ СТЭК:
-- ПРЕАМБУЛА: \usetikzlibrary{arrows.meta, patterns, calc}.
-- ТЕКСТ: Кириллицу пиши в фигурных скобках {груз}.
+    if r'\documentclass' not in code and r'\begin{tikzpicture}' in code:
+        code = r'''\documentclass[border=10pt]{standalone}
+\usepackage{tikz}
+\begin{document}
+''' + code + r'''
+\end{document}'''
 
-4. ОГРАНИЧЕНИЯ:
-- Начинай СРАЗУ с \documentclass. Без Markdown разметки.
-
-"""
-
-VISION_PROMPT = r"""
-Проанализируй физическую схему и составь техническое описание для TikZ.
-Опиши:
-1. Линии поверхности (координаты).
-2. Положение объектов (бруски, блоки).
-3. Направление сил (стрелок).
-4. Текстовые метки.
-Пиши только сухие геометрические факты.
-
-"""
-
+    return code.strip()
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/convert', methods=['POST'])
-def convert_image():
-    # 1. Базовые проверки
+def convert():
     if 'image' not in request.files:
-        return jsonify({'error': 'Файл не получен'}), 400
-    
-    file = request.files['image']
-    if file.filename == '':
-        return jsonify({'error': 'Файл не выбран'}), 400
-
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    last_error = "Неизвестная ошибка"
+        return jsonify({'error': 'No file'}), 400
 
     try:
-        file.save(filepath)
-        with open(filepath, "rb") as img_file:
-            base64_image = base64.b64encode(img_file.read()).decode('utf-8')
+        img_b64 = process_image(request.files['image'])
 
-        # ШАГ 1: VISION (Распознавание)
-        description = ""
-        for v_model in VISION_MODELS:
-            try:
-                print(f"DEBUG: Пробую Vision модель {v_model}")
-                response = client.chat.completions.create(
-                    model=v_model,
-                    extra_headers={
-                        "HTTP-Referer": "https://render.com", 
-                        "X-Title": "TikZ Tool",
-                    },
-                    messages=[{
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": SYSTEM_PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                ]
+            }
+        ]
+
+        def stream_one_request(msgs):
+            """Один стрим-запрос, возвращает (текст, finish_reason)"""
+            text_out = ""
+            finish = None
+            stream = hf_client.chat_completion(
+                model=MODEL_ID,
+                messages=msgs,
+                max_tokens=8192,
+                stream=True
+            )
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                text = getattr(delta, 'content', '') or ''
+                if text:
+                    text_out += text
+                    yield text
+                if getattr(choice, 'finish_reason', None):
+                    finish = choice.finish_reason
+            # Сохраняем finish_reason в атрибут генератора через замыкание
+            stream_one_request._finish = finish
+            stream_one_request._text = text_out
+
+        def is_complete(code):
+            return r'\end{document}' in code
+
+        def generate():
+            """SSE стриминг с автопродолжением при обрезке"""
+            full_content = ""
+            MAX_CONTINUATIONS = 5
+
+            # Первый запрос (с картинкой)
+            for attempt in range(3):
+                try:
+                    print(f"  Attempt {attempt + 1}/3...")
+                    yield f"data: {json.dumps({'status': 'Генерация кода...'})}\n\n"
+
+                    for text in stream_one_request(messages):
+                        full_content += text
+                        yield f"data: {json.dumps({'chunk': text})}\n\n"
+                    break
+
+                except Exception as api_err:
+                    err_str = str(api_err)
+                    if "503" in err_str or "504" in err_str:
+                        wait = 15 * (attempt + 1)
+                        print(f"  Model loading, retry in {wait}s...")
+                        yield f"data: {json.dumps({'status': f'Модель загружается, повтор через {wait}с...'})}\n\n"
+                        time.sleep(wait)
+                    else:
+                        yield f"data: {json.dumps({'error': str(api_err)})}\n\n"
+                        return
+            else:
+                yield f"data: {json.dumps({'error': 'Не удалось подключиться после 3 попыток'})}\n\n"
+                return
+
+            # Автопродолжение — если код обрезан, просим модель дописать
+            continuation = 0
+            while not is_complete(full_content) and continuation < MAX_CONTINUATIONS:
+                continuation += 1
+                print(f"  Continuation {continuation}/{MAX_CONTINUATIONS}...")
+                yield f"data: {json.dumps({'status': f'Код обрезан, продолжаю генерацию ({continuation}/{MAX_CONTINUATIONS})...'})}\n\n"
+
+                # Передаём картинку + историю: модель видит изображение и свой предыдущий ответ
+                cont_messages = [
+                    {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": VISION_PROMPT},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                            {"type": "text", "text": SYSTEM_PROMPT},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
                         ]
-                    }],
-                    timeout=30
-                )
-                description = response.choices[0].message.content
-                if description:
-                    print(f"DEBUG: Vision SUCCESS ({v_model})")
-                    break
-            except Exception as e:
-                last_error = f"Vision ({v_model}) failed: {str(e)}"
-                print(f"DEBUG ERROR: {last_error}")
-                continue
-
-        if not description:
-            return jsonify({'error': f"Ошибка на этапе зрения: {last_error}"}), 503
-
-        # ШАГ 2: CODER (Генерация кода)
-        latex_code = ""
-        for c_model in CODER_MODELS:
-            try:
-                print(f"DEBUG: Пробую Coder модель {c_model}")
-                response = client.chat.completions.create(
-                    model=c_model,
-                    extra_headers={
-                        "HTTP-Referer": "https://render.com",
-                        "X-Title": "TikZ Tool",
                     },
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Создай TikZ код по описанию:\n{description}"}
-                    ],
-                    temperature=0.1,
-                    timeout=45
-                )
-                content = response.choices[0].message.content
-                if content and r"\documentclass" in content:
-                    latex_code = content
-                    print(f"DEBUG: Coder SUCCESS ({c_model})")
+                    {
+                        "role": "assistant",
+                        "content": full_content
+                    },
+                    {
+                        "role": "user",
+                        "content": "/no_think\nYour code was cut off. Continue EXACTLY from where you stopped. Output ONLY the remaining code."
+                    }
+                ]
+
+                try:
+                    for text in stream_one_request(cont_messages):
+                        full_content += text
+                        yield f"data: {json.dumps({'chunk': text})}\n\n"
+                except Exception as e:
+                    print(f"  Continuation error: {e}")
                     break
-            except Exception as e:
-                last_error = f"Coder ({c_model}) failed: {str(e)}"
-                print(f"DEBUG ERROR: {last_error}")
-                continue
 
-        if not latex_code:
-            return jsonify({'error': f"Ошибка на этапе кода: {last_error}"}), 503
+            clean_code = clean_latex(full_content)
+            yield f"data: {json.dumps({'done': True, 'latex': clean_code})}\n\n"
 
-        # Очистка результата
-        latex_code = re.sub(r'^```latex\s*|```', '', latex_code, flags=re.MULTILINE)
-        if r"\documentclass" in latex_code:
-            latex_code = latex_code[latex_code.find(r"\documentclass"):]
-
-        return jsonify({'success': True,
-                        'latex': latex_code.strip(),
-                        'debug_description': description
-                        
-                        })
+        return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
-        # Это поймает ошибки самого Python (например, проблемы с файловой системой)
-        error_trace = traceback.format_exc()
-        print(f"CRITICAL:\n{error_trace}")
-        return jsonify({'error': f"Критический сбой: {str(e)}"}), 500
-    finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Error: {str(e)}'}), 500
 
 if __name__ == '__main__':
+    print("=" * 60)
+    print("Image to TikZ Converter — Hugging Face")
+    print(f"Model: {MODEL_ID}")
+    print(f"HF Token: {'OK' if HF_TOKEN else 'MISSING'}")
+    print("=" * 60)
     app.run(debug=True, host='0.0.0.0', port=5000)
