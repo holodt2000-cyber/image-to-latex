@@ -144,100 +144,104 @@
     </div>
 </header>
 
-<main class="pt-8 pb-20 px-8 min-h-screen max-w-[900px] mx-auto flex flex-col gap-gutter">
+<main class="pt-8 pb-20 px-8 min-h-screen max-w-[1600px] mx-auto">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter items-start">
 
-<!-- Upload Area -->
-<section>
-    <div class="flex items-center gap-sm mb-md">
-        <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">upload_file</span>
-        <h2 class="font-h3 text-h3 text-on-surface">Input</h2>
-    </div>
+    <!-- Left Column: Input -->
+    <section class="flex flex-col gap-md">
+        <div class="flex items-center gap-sm mb-2">
+            <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">upload_file</span>
+            <h2 class="font-h3 text-h3 text-on-surface">Input</h2>
+        </div>
 
-    <div id="uploadArea" class="bg-surface-container-low border-2 border-dashed border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center gap-md group hover:border-primary/50 transition-all cursor-pointer min-h-[220px]">
-        <input type="file" id="imageInput" accept="image/*" hidden>
-        <div id="uploadPrompt">
-            <div class="flex justify-center mb-md">
-                <div class="w-16 h-16 rounded-full bg-secondary-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
-                    <span class="material-symbols-outlined text-3xl">add_photo_alternate</span>
+        <!-- Upload Area -->
+        <div id="uploadArea" class="bg-surface-container-low border-2 border-dashed border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center gap-md group hover:border-primary/50 transition-all cursor-pointer min-h-[260px]">
+            <input type="file" id="imageInput" accept="image/*" hidden>
+            <div id="uploadPrompt">
+                <div class="flex justify-center mb-md">
+                    <div class="w-16 h-16 rounded-full bg-secondary-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+                        <span class="material-symbols-outlined text-3xl">add_photo_alternate</span>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <p class="font-body-lg text-body-lg text-on-surface mb-xs">Нажмите или перетащите изображение</p>
+                    <p class="font-label-sm text-label-sm text-on-surface-variant">PNG, JPG, JPEG | Ctrl+V для вставки</p>
                 </div>
             </div>
-            <div class="text-center">
-                <p class="font-body-lg text-body-lg text-on-surface mb-xs">Нажмите или перетащите изображение</p>
-                <p class="font-label-sm text-label-sm text-on-surface-variant">PNG, JPG, JPEG | Ctrl+V для вставки</p>
+            <div id="previewBox" class="hidden flex flex-col items-center gap-sm w-full">
+                <img id="previewImage" alt="Preview" class="max-w-full max-h-[220px] rounded-lg">
+                <p id="fileNameDisplay" class="font-label-sm text-primary font-bold"></p>
+                <p class="font-label-sm text-on-surface-variant">Нажмите для замены</p>
             </div>
         </div>
-        <div id="previewBox" class="hidden flex flex-col items-center gap-sm w-full">
-            <img id="previewImage" alt="Preview" class="max-w-full max-h-[200px] rounded-lg">
-            <p id="fileNameDisplay" class="font-label-sm text-primary font-bold"></p>
-            <p class="font-label-sm text-on-surface-variant">Нажмите для замены</p>
+
+        <!-- Instructions -->
+        <div class="flex flex-col gap-xs">
+            <label class="font-label-sm text-label-sm text-on-surface-variant px-1">Пожелания (опционально)</label>
+            <textarea id="instructionsInput" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-sm font-body-md text-body-md text-on-surface focus:ring-1 focus:ring-primary focus:border-primary outline-none min-h-[120px] transition-all resize-none placeholder:text-on-surface-variant/30" placeholder="Напр.: сделай линии толще, используй библиотеку arrows.meta, добавь подписи на русском..."></textarea>
         </div>
-    </div>
-</section>
 
-<!-- Instructions -->
-<section class="flex flex-col gap-xs">
-    <label class="font-label-sm text-label-sm text-on-surface-variant px-1">Пожелания (опционально)</label>
-    <textarea id="instructionsInput" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-sm font-body-md text-body-md text-on-surface focus:ring-1 focus:ring-primary focus:border-primary outline-none min-h-[100px] transition-all resize-none placeholder:text-on-surface-variant/30" placeholder="Напр.: сделай линии толще, используй библиотеку arrows.meta, добавь подписи на русском..."></textarea>
-</section>
+        <!-- Convert Button -->
+        <button id="convertBtn" class="hidden w-full bg-primary-container hover:bg-primary-container/90 text-on-primary-container font-h3 text-h3 py-md rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-sm shadow-lg shadow-primary/10 mt-auto">
+            <span class="material-symbols-outlined">auto_fix_high</span>
+            Конвертировать в TikZ
+        </button>
+    </section>
 
-<!-- Convert Button -->
-<button id="convertBtn" class="hidden w-full bg-primary-container hover:bg-primary-container/90 text-on-primary-container font-h3 text-h3 py-md rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-sm shadow-lg shadow-primary/10">
-    <span class="material-symbols-outlined">auto_fix_high</span>
-    Конвертировать в TikZ
-</button>
-
-<!-- Output -->
-<section class="flex flex-col gap-md">
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-sm">
-            <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">code</span>
-            <h2 class="font-h3 text-h3 text-on-surface">Output</h2>
+    <!-- Right Column: Output -->
+    <section class="flex flex-col gap-md">
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-sm">
+                <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">code</span>
+                <h2 class="font-h3 text-h3 text-on-surface">Output</h2>
+            </div>
+            <div id="statusIndicator" class="flex items-center gap-2">
+                <span id="statusDot" class="w-2 h-2 rounded-full bg-outline"></span>
+                <span id="statusLabel" class="font-label-sm text-label-sm text-on-surface-variant">Ready</span>
+            </div>
         </div>
-        <div id="statusIndicator" class="flex items-center gap-2">
-            <span id="statusDot" class="w-2 h-2 rounded-full bg-outline"></span>
-            <span id="statusLabel" class="font-label-sm text-label-sm text-on-surface-variant">Ready</span>
-        </div>
-    </div>
 
-    <div id="result" class="hidden flex flex-col">
-        <div class="bg-surface-container-highest rounded-xl border border-outline-variant/30 overflow-hidden flex flex-col shadow-xl">
-            <!-- Editor Header -->
-            <div class="bg-surface-container-high px-md py-sm border-b border-outline-variant/20 flex items-center justify-between">
-                <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">tikz_code.tex</span>
-                <div class="flex gap-1">
-                    <div class="w-2.5 h-2.5 rounded-full bg-red-900/50"></div>
-                    <div class="w-2.5 h-2.5 rounded-full bg-amber-900/50"></div>
-                    <div class="w-2.5 h-2.5 rounded-full bg-green-900/50"></div>
+        <!-- Output Editor -->
+        <div id="result" class="hidden flex flex-col">
+            <div class="bg-surface-container-highest rounded-xl border border-outline-variant/30 overflow-hidden flex flex-col shadow-xl">
+                <!-- Editor Header -->
+                <div class="bg-surface-container-high px-md py-sm border-b border-outline-variant/20 flex items-center justify-between">
+                    <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">tikz_code.tex</span>
+                    <div class="flex gap-1">
+                        <div class="w-2.5 h-2.5 rounded-full bg-red-900/50"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-amber-900/50"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-900/50"></div>
+                    </div>
                 </div>
+                <!-- Loading (inside editor) -->
+                <div id="loading" class="hidden flex flex-col items-center justify-center gap-sm py-xl bg-[#121412]">
+                    <div class="spinner"></div>
+                    <p id="loadingText" class="text-primary font-bold text-sm">Генерация TikZ кода...</p>
+                    <p id="streamStatus" class="text-on-surface-variant text-xs"></p>
+                </div>
+                <!-- Editor Content -->
+                <textarea id="latexOutput"></textarea>
             </div>
-            <!-- Loading (inside editor) -->
-            <div id="loading" class="hidden flex flex-col items-center justify-center gap-sm py-xl bg-[#121412]">
-                <div class="spinner"></div>
-                <p id="loadingText" class="text-primary font-bold text-sm">Генерация TikZ кода...</p>
-                <p id="streamStatus" class="text-on-surface-variant text-xs"></p>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-3 gap-sm mt-md">
+                <button id="copyBtn" class="bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm py-sm rounded-lg border border-outline-variant/30 flex items-center justify-center gap-2 transition-all active:scale-95">
+                    <span class="material-symbols-outlined text-sm">content_copy</span>
+                    Копировать
+                </button>
+                <button id="refineBtn" class="bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm py-sm rounded-lg border border-outline-variant/30 flex items-center justify-center gap-2 transition-all active:scale-95">
+                    <span class="material-symbols-outlined text-sm">build</span>
+                    Исправить код
+                </button>
+                <button id="overleafBtn" class="bg-secondary-container hover:bg-secondary-container/80 text-on-secondary-container font-label-sm py-sm rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                    <span class="material-symbols-outlined text-sm">cloud_upload</span>
+                    Overleaf
+                </button>
             </div>
-            <!-- Editor Content -->
-            <textarea id="latexOutput"></textarea>
         </div>
+    </section>
 
-        <!-- Action Buttons -->
-        <div class="grid grid-cols-3 gap-sm mt-md">
-            <button id="copyBtn" class="bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm py-sm rounded-lg border border-outline-variant/30 flex items-center justify-center gap-2 transition-all active:scale-95">
-                <span class="material-symbols-outlined text-sm">content_copy</span>
-                Копировать
-            </button>
-            <button id="refineBtn" class="bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm py-sm rounded-lg border border-outline-variant/30 flex items-center justify-center gap-2 transition-all active:scale-95">
-                <span class="material-symbols-outlined text-sm">build</span>
-                Исправить код
-            </button>
-            <button id="overleafBtn" class="bg-secondary-container hover:bg-secondary-container/80 text-on-secondary-container font-label-sm py-sm rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95">
-                <span class="material-symbols-outlined text-sm">cloud_upload</span>
-                Overleaf
-            </button>
-        </div>
-    </div>
-</section>
-
+</div>
 </main>
 
 <footer class="fixed bottom-0 left-0 w-full flex justify-between items-center px-8 py-3 bg-[#1A1C1A]/80 backdrop-blur-md border-t border-zinc-800/30">
