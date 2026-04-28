@@ -35,27 +35,36 @@ hf_client = InferenceClient(token=HF_TOKEN, timeout=180)
 
 # Универсальный промпт для любых изображений
 SYSTEM_PROMPT = r"""/no_think
-You are a TikZ LaTeX expert. Convert the image into clean, professional TikZ code.
+You are a TikZ LaTeX expert. Your task: reproduce the image EXACTLY as TikZ code.
 
-RULES:
+CRITICAL RULES:
+1. ONLY reproduce what you see in the image. Do NOT add, invent, or embellish anything.
+2. Do NOT add elements, labels, colors, or decorations that are not in the image.
+3. If something is unclear, keep it simple rather than guessing.
+
+CODE STRUCTURE (must compile with pdflatex):
 - Start with \documentclass[tikz,border=10pt]{standalone}
-- Include all needed \usetikzlibrary (patterns, arrows.meta, decorations, etc.)
-- Use \def for key dimensions so the diagram is easy to rescale
-- Use pattern=north west lines for hatched/shaded surfaces
-- Use \filldraw for filled shapes, proper arrow styles (>=Stealth)
-- Add short comments for each logical section
-- Reproduce colors, labels, arrows, and annotations from the image
-- Keep code clean, well-indented, and complete
+- \usepackage{tikz}
+- Include ALL needed \usetikzlibrary BEFORE \begin{document}
+- \begin{document} ... \end{document} must be present
+- Every \begin{...} must have a matching \end{...}
+- Every { must have a matching }
+- Use only standard TikZ packages (no custom or rare packages)
 
-Output ONLY the LaTeX code. No markdown fences, no explanations."""
+STYLE:
+- Use >=Stealth for arrows (requires arrows.meta)
+- Use pattern=north west lines for hatched areas (requires patterns)
+- Keep code clean and well-indented
+
+Output ONLY the complete, compilable LaTeX code. No markdown fences, no text before or after."""
 
 def process_image(file):
     img = Image.open(file)
     if img.mode != 'RGB':
         img = img.convert('RGB')
-    img.thumbnail((512, 512))
+    img.thumbnail((1024, 1024))
     buf = io.BytesIO()
-    img.save(buf, format='JPEG', quality=75)
+    img.save(buf, format='JPEG', quality=85)
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 def clean_latex(code):
@@ -107,6 +116,7 @@ def convert():
                 model=MODEL_ID,
                 messages=msgs,
                 max_tokens=8192,
+                temperature=0.2,
                 stream=True
             )
             for chunk in stream:
@@ -120,7 +130,6 @@ def convert():
                     yield text
                 if getattr(choice, 'finish_reason', None):
                     finish = choice.finish_reason
-            # Сохраняем finish_reason в атрибут генератора через замыкание
             stream_one_request._finish = finish
             stream_one_request._text = text_out
 
@@ -202,15 +211,18 @@ def convert():
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
 REFINE_PROMPT = r"""/no_think
-You are a TikZ LaTeX expert. The user has existing TikZ code and wants modifications.
+You are a TikZ LaTeX expert. Modify the given code according to user instructions.
 
-RULES:
-- Output the COMPLETE modified LaTeX code (not a diff, not partial)
-- Keep \documentclass[tikz,border=10pt]{standalone}
-- Preserve existing structure, only change what was requested
-- Keep code clean, well-indented, and complete
+CRITICAL RULES:
+1. Output the COMPLETE modified LaTeX code (not a diff, not partial).
+2. ONLY change what the user asked for. Do NOT add or remove anything else.
+3. Do NOT invent new elements, decorations, or embellishments.
+4. The code MUST compile with pdflatex without errors.
+5. Keep \documentclass[tikz,border=10pt]{standalone}
+6. All \usetikzlibrary must be BEFORE \begin{document}
+7. Every \begin{...} must have a matching \end{...}
 
-Output ONLY the LaTeX code. No markdown fences, no explanations."""
+Output ONLY the complete, compilable LaTeX code. No markdown fences, no text before or after."""
 
 @app.route('/refine', methods=['POST'])
 def refine():
@@ -237,6 +249,7 @@ def refine():
                 model=MODEL_ID,
                 messages=msgs,
                 max_tokens=8192,
+                temperature=0.2,
                 stream=True
             )
             for chunk in stream:

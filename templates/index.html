@@ -153,22 +153,27 @@
             <h2 class="font-h3 text-h3 text-on-surface">Input</h2>
         </div>
 
-        <!-- Upload Area -->
-        <div id="uploadArea" class="bg-surface-container-low border-2 border-dashed border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center gap-md group hover:border-primary/50 transition-all cursor-pointer min-h-[260px]">
+        <!-- Upload Area (contains both upload prompt and preview) -->
+        <div id="uploadArea" class="bg-surface-container-low border-2 border-dashed border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center gap-md group hover:border-primary/50 transition-all cursor-pointer min-h-[260px] relative">
             <input type="file" id="imageInput" accept="image/*" hidden>
-            <div class="w-16 h-16 rounded-full bg-secondary-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
-                <span class="material-symbols-outlined text-3xl">add_photo_alternate</span>
+            <!-- Upload prompt (hidden after file selected) -->
+            <div id="uploadPrompt">
+                <div class="flex justify-center mb-md">
+                    <div class="w-16 h-16 rounded-full bg-secondary-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+                        <span class="material-symbols-outlined text-3xl">add_photo_alternate</span>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <p class="font-body-lg text-body-lg text-on-surface mb-xs">Нажмите или перетащите изображение</p>
+                    <p class="font-label-sm text-label-sm text-on-surface-variant">PNG, JPG, JPEG | Ctrl+V для вставки</p>
+                </div>
             </div>
-            <div class="text-center">
-                <p class="font-body-lg text-body-lg text-on-surface mb-xs">Нажмите или перетащите изображение</p>
-                <p class="font-label-sm text-label-sm text-on-surface-variant">PNG, JPG, JPEG | Ctrl+V для вставки</p>
+            <!-- Preview (shown after file selected, replaces upload prompt) -->
+            <div id="previewBox" class="hidden flex flex-col items-center gap-sm w-full">
+                <img id="previewImage" alt="Preview" class="max-w-full max-h-[220px] rounded-lg">
+                <p id="fileNameDisplay" class="font-label-sm text-primary font-bold"></p>
+                <p class="font-label-sm text-on-surface-variant">Нажмите для замены</p>
             </div>
-            <p id="fileNameDisplay" class="font-label-sm text-primary font-bold mt-1"></p>
-        </div>
-
-        <!-- Image Preview -->
-        <div id="previewBox" class="hidden bg-surface-container-low rounded-xl p-md border border-outline-variant/30">
-            <img id="previewImage" alt="Preview" class="max-w-full max-h-[250px] rounded-lg mx-auto">
         </div>
 
         <!-- Instructions -->
@@ -197,13 +202,6 @@
             </div>
         </div>
 
-        <!-- Loading -->
-        <div id="loading" class="hidden flex flex-col items-center gap-sm py-lg">
-            <div class="spinner"></div>
-            <p id="loadingText" class="text-primary font-bold text-sm">Генерация TikZ кода...</p>
-            <p id="streamStatus" class="text-on-surface-variant text-xs"></p>
-        </div>
-
         <!-- Output Editor -->
         <div id="result" class="hidden flex flex-col">
             <div class="flex-grow bg-surface-container-highest rounded-xl border border-outline-variant/30 overflow-hidden flex flex-col shadow-xl">
@@ -215,6 +213,12 @@
                         <div class="w-2.5 h-2.5 rounded-full bg-amber-900/50"></div>
                         <div class="w-2.5 h-2.5 rounded-full bg-green-900/50"></div>
                     </div>
+                </div>
+                <!-- Loading (inside editor) -->
+                <div id="loading" class="hidden flex flex-col items-center justify-center gap-sm py-xl bg-[#121412]">
+                    <div class="spinner"></div>
+                    <p id="loadingText" class="text-primary font-bold text-sm">Генерация TikZ кода...</p>
+                    <p id="streamStatus" class="text-on-surface-variant text-xs"></p>
                 </div>
                 <!-- Editor Content -->
                 <textarea id="latexOutput"></textarea>
@@ -252,6 +256,7 @@
 
 <script>
     const uploadArea = document.getElementById('uploadArea');
+    const uploadPrompt = document.getElementById('uploadPrompt');
     const imageInput = document.getElementById('imageInput');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
     const previewBox = document.getElementById('previewBox');
@@ -319,9 +324,9 @@
         const reader = new FileReader();
         reader.onload = function(e) {
             previewImage.src = e.target.result;
+            uploadPrompt.classList.add('hidden');
             previewBox.classList.remove('hidden');
             convertBtn.classList.remove('hidden');
-            resultBox.classList.add('hidden');
             setStatus('ready', 'Ready');
         }
         reader.readAsDataURL(file);
@@ -342,9 +347,10 @@
             formData.append('instructions', instructionsInput.value.trim());
         }
 
+        resultBox.classList.remove('hidden');
         loading.classList.remove('hidden');
+        latexOutput.classList.add('hidden');
         convertBtn.classList.add('hidden');
-        resultBox.classList.add('hidden');
         streamStatus.textContent = '';
         loadingText.textContent = 'Генерация TikZ кода...';
         latexOutput.value = '';
@@ -385,6 +391,7 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let firstChunk = true;
 
         resultBox.classList.remove('hidden');
 
@@ -405,9 +412,13 @@
                     const data = JSON.parse(jsonStr);
 
                     if (data.chunk) {
+                        if (firstChunk) {
+                            loading.classList.add('hidden');
+                            latexOutput.classList.remove('hidden');
+                            firstChunk = false;
+                        }
                         latexOutput.value += data.chunk;
                         latexOutput.scrollTop = latexOutput.scrollHeight;
-                        loadingText.textContent = 'Генерация...';
                     }
 
                     if (data.status) {
@@ -417,6 +428,7 @@
                     if (data.done) {
                         latexOutput.value = data.latex;
                         loading.classList.add('hidden');
+                        latexOutput.classList.remove('hidden');
                         convertBtn.classList.remove('hidden');
                         refineBtn.disabled = false;
                         setStatus('done', 'Done');
@@ -433,6 +445,7 @@
         }
 
         loading.classList.add('hidden');
+        latexOutput.classList.remove('hidden');
         convertBtn.classList.remove('hidden');
         refineBtn.disabled = false;
         setStatus('done', 'Done');
@@ -452,7 +465,9 @@
             return;
         }
 
+        resultBox.classList.remove('hidden');
         loading.classList.remove('hidden');
+        latexOutput.classList.add('hidden');
         refineBtn.disabled = true;
         convertBtn.classList.add('hidden');
         streamStatus.textContent = '';
