@@ -1,117 +1,99 @@
 # Image to TikZ Converter
 
-Веб-приложение для конвертации изображений в TikZ код с использованием AI моделей от Hugging Face.
+AI-powered web application for converting images to TikZ code using Hugging Face vision-language models.
 
-## Возможности
+## Features
 
-- Загрузка изображений через drag & drop или выбор файла
-- Вставка изображений из буфера обмена (Ctrl+V)
-- AI-генерация TikZ кода с помощью vision-language моделей
-- Копирование TikZ кода в буфер обмена
-- Поддержка различных моделей для оптимального качества
+- 🖼️ Drag & drop or file upload
+- 📋 Paste images from clipboard (Ctrl+V)
+- 🤖 AI-powered TikZ code generation
+- 📝 One-click code copying
+- ⚡ Multiple model support for optimal quality
 
-## Технологии
+## Tech Stack
 
 - **Backend**: Flask (Python)
 - **Frontend**: HTML, CSS, JavaScript
 - **AI**: Hugging Face Inference API
 - **Image Processing**: Pillow
 
-## Установка
+## Quick Start
 
-1. Клонируйте репозиторий:
+1. Clone the repository:
 ```bash
 git clone <repository-url>
 cd image-to-latex
 ```
 
-2. Создайте виртуальное окружение:
+2. Install dependencies:
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-```
-
-3. Установите зависимости:
-```bash
+venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-4. Настройте Hugging Face токен:
+3. Configure Hugging Face token:
 ```bash
-# Скопируйте пример конфигурации
+# Copy example config
 cp .env.example .env
 
-# Получите токен на https://huggingface.co/settings/tokens
-# Отредактируйте .env и добавьте ваш токен:
-HF_TOKEN=hf_ваш_токен_здесь
+# Get your token at https://huggingface.co/settings/tokens
+# Edit .env and add your token:
+HF_TOKEN=hf_your_token_here
 ```
 
-## Запуск
-
-Просто запустите `START.bat` или:
-
+4. Run the application:
 ```bash
 python app.py
+# or simply run START.bat
 ```
 
-Откройте браузер и перейдите по адресу: http://localhost:5000
+Open http://localhost:5000 in your browser.
 
-## Использование
+## Usage
 
-1. Откройте веб-интерфейс
-2. Загрузите изображение (или вставьте через Ctrl+V)
-3. Нажмите "Конвертировать в TikZ"
-4. Дождитесь обработки (30-60 секунд при первом запуске модели)
-5. Скопируйте сгенерированный TikZ код
-6. Вставьте код в TeXmaker или Overleaf
+1. Upload an image (drag & drop or Ctrl+V)
+2. Click "Convert to TikZ"
+3. Wait for processing (~30-60 seconds on first run)
+4. Copy the generated TikZ code
+5. Use in TeXmaker or Overleaf
 
-## Рекомендуемые модели
+## Supported Models
 
-В файле `.env` вы можете выбрать модель:
+Configure in `.env` file:
 
-### 1. Qwen/Qwen2-VL-72B-Instruct (по умолчанию)
-- Лучшее качество для сложных диаграмм
-- Отличное понимание математических формул
-- Время обработки: ~30-60 сек
+### Qwen/Qwen2-VL-72B-Instruct (default)
+- Best quality for complex diagrams
+- Excellent math formula understanding
+- Processing time: ~30-60 sec
 
-### 2. meta-llama/Llama-3.2-11B-Vision-Instruct
-- Хороший баланс скорости и качества
-- Быстрее чем Qwen
-- Время обработки: ~20-40 сек
+### meta-llama/Llama-3.2-11B-Vision-Instruct
+- Good balance of speed and quality
+- Faster than Qwen
+- Processing time: ~20-40 sec
 
-### 3. mistralai/Pixtral-12B-2409
-- Специализация на математике и научных диаграммах
-- Отличная точность для формул
-- Время обработки: ~25-45 сек
+### mistralai/Pixtral-12B-2409
+- Specialized in math and scientific diagrams
+- High accuracy for formulas
+- Processing time: ~25-45 sec
 
-Чтобы изменить модель, отредактируйте `.env`:
+Change model in `.env`:
 ```bash
 MODEL_ID=meta-llama/Llama-3.2-11B-Vision-Instruct
 ```
 
-## Поддерживаемые форматы
+## Supported Formats
 
-- PNG
-- JPG/JPEG
-- GIF
-- BMP
-- WEBP
+PNG, JPG/JPEG, GIF, BMP, WEBP
 
-## Устранение неполадок
+## Troubleshooting
 
-### Ошибка "401 Unauthorized"
-- Проверьте, что HF_TOKEN правильно указан в `.env`
-- Убедитесь, что токен активен на https://huggingface.co/settings/tokens
+**401 Unauthorized**: Check your HF_TOKEN in `.env`
 
-### Ошибка "503 Service Unavailable"
-- Модель загружается в первый раз (подождите 30-60 секунд)
-- Попробуйте другую модель
+**503 Service Unavailable**: Model is loading (wait 30-60 sec) or try another model
 
-### Ошибка "404 Model not found"
-- Проверьте правильность названия модели в `.env`
-- Убедитесь, что модель доступна на Hugging Face
+**404 Model not found**: Verify model name in `.env`
 
-## Лицензия
+## License
 
 MIT

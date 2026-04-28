@@ -83,12 +83,17 @@ def convert():
 
     try:
         img_b64 = process_image(request.files['image'])
+        instructions = request.form.get('instructions', '').strip()
+
+        prompt_text = SYSTEM_PROMPT
+        if instructions:
+            prompt_text += f"\n\nADDITIONAL USER INSTRUCTIONS:\n{instructions}"
 
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": SYSTEM_PROMPT},
+                    {"type": "text", "text": prompt_text},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
                 ]
             }
